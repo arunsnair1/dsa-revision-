@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "feat",
   "description": "Add bonus/extra reviews feature: when all scheduled items for the day are completed and time remains in the budget, offer additional review items drawn from deferred items and items due tomorrow.",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Add getBonusItems(state) method to Scheduler that calculates remaining time and pulls bonus items from deferred items first, then items due tomorrow",
     "Update renderDashboard() to detect when all scheduled items are done (scheduled array is empty after feedback) and show an Extra Reviews section with bonus items",
@@ -20,5 +20,5 @@
     "Verify JS syntax with node --check app.js"
   ],
   "blocked_reason": null,
-  "findings": null
+  "findings": "Implemented getBonusItems in Scheduler module and renderBonusItem in App. Bonus section only appears when all scheduled items have received feedback (detected via empty scheduled array and today's history count > 0). Time calculation uses current item type as proxy for original time spent. JS syntax verified with node --check."
 }
