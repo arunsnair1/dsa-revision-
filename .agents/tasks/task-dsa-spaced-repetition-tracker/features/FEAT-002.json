@@ -2,7 +2,7 @@
   "id": "FEAT-002",
   "type": "feat",
   "description": "Add adjustable completion date picker and decorative dashboard animations (clock widget, floating shapes, rotating quotes).",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Modify the markCompleted function in app.js to show a date picker instead of immediately marking done with today's date",
     "Update the scheduleRevision logic to use the selected date instead of today when scheduling first revision",
@@ -26,5 +26,5 @@
     "Verify no external URLs or CDN references added"
   ],
   "blocked_reason": null,
-  "findings": null
+  "findings": "Both features implemented successfully. Date picker uses inline display pattern (shows/hides next to the Done button). The scheduleRevision function now accepts an optional fromDate parameter so intervals are calculated from the selected date. Clock uses setInterval(1000) for second hand. Floating shapes use CSS keyframe animations with pointer-events:none to avoid interaction. Quotes rotate every 8 seconds with a 500ms fade transition. All JS passes node --check. No external URLs introduced."
 }
