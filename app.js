@@ -116,8 +116,8 @@ const SpacedRepetitionEngine = {
     return MASTERY.NEW;
   },
 
-  scheduleRevision(questionId, feedback, state) {
-    const today = this.getToday();
+  scheduleRevision(questionId, feedback, state, fromDate) {
+    const today = fromDate || this.getToday();
     let existing = state.revisionSchedule.find(r => r.questionId === questionId);
 
     if (!existing) {
@@ -451,6 +451,42 @@ const App = {
 
     let html = '';
 
+    // Floating background shapes
+    html += `<div class="floating-shapes" aria-hidden="true">
+      <div class="shape shape-circle shape-1"></div>
+      <div class="shape shape-square shape-2"></div>
+      <div class="shape shape-circle shape-3"></div>
+      <div class="shape shape-triangle shape-4"></div>
+      <div class="shape shape-square shape-5"></div>
+      <div class="shape shape-circle shape-6"></div>
+    </div>`;
+
+    // Decorative widgets row
+    html += `<div class="dashboard-widgets">`;
+
+    // Animated clock widget
+    html += `<div class="clock-widget card">
+      <div class="clock-face">
+        <div class="clock-hand clock-hour" id="clock-hour"></div>
+        <div class="clock-hand clock-minute" id="clock-minute"></div>
+        <div class="clock-hand clock-second" id="clock-second"></div>
+        <div class="clock-center"></div>
+        <div class="clock-marker clock-12"></div>
+        <div class="clock-marker clock-3"></div>
+        <div class="clock-marker clock-6"></div>
+        <div class="clock-marker clock-9"></div>
+      </div>
+      <div class="clock-digital" id="clock-digital"></div>
+    </div>`;
+
+    // Motivational quote widget
+    html += `<div class="quote-widget card">
+      <div class="quote-text" id="quote-text"></div>
+      <div class="quote-author" id="quote-author"></div>
+    </div>`;
+
+    html += `</div>`;
+
     // Warning banners
     if (stats.isBehind && stats.daysRemaining > 0) {
       html += `<div class="warning-banner">
@@ -514,6 +550,8 @@ const App = {
 
     container.innerHTML = html;
     this.bindDashboardEvents();
+    this.startClock();
+    this.rotateQuote();
   },
 
   renderReviewItem(item, isDeferred) {
@@ -600,6 +638,7 @@ const App = {
     const schedItem = this.state.revisionSchedule.find(r => r.questionId === q.id);
     const mastery = SpacedRepetitionEngine.getMasteryLevel(schedItem);
     const diffClass = q.difficulty.toLowerCase();
+    const today = SpacedRepetitionEngine.getToday();
 
     return `<div class="question-item ${isCompleted ? 'question-completed' : ''}">
       <div class="question-info">
@@ -609,7 +648,12 @@ const App = {
       <div class="question-actions">
         ${isCompleted ?
           `<span class="badge badge-${mastery.toLowerCase()}">${mastery}</span>` :
-          `<button class="btn btn-sm btn-primary complete-btn" data-id="${q.id}">Mark Complete</button>`
+          `<span class="date-picker-group" id="dp-group-${q.id}" style="display:none">
+            <input type="date" class="date-picker-input" id="dp-${q.id}" value="${today}" max="${today}">
+            <button class="btn btn-sm btn-success confirm-complete-btn" data-id="${q.id}">Confirm</button>
+            <button class="btn btn-sm btn-ghost cancel-complete-btn" data-id="${q.id}">&times;</button>
+          </span>
+          <button class="btn btn-sm btn-primary complete-btn" data-id="${q.id}" id="done-btn-${q.id}">Mark Complete</button>`
         }
       </div>
     </div>`;
@@ -625,12 +669,39 @@ const App = {
       });
     });
 
-    // Individual complete
+    // Individual complete - show date picker
     document.querySelectorAll('.complete-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const questionId = parseInt(e.target.dataset.id);
-        this.markCompleted(questionId);
+        // Hide button, show date picker group
+        const doneBtn = document.getElementById(`done-btn-${questionId}`);
+        const dpGroup = document.getElementById(`dp-group-${questionId}`);
+        if (doneBtn) doneBtn.style.display = 'none';
+        if (dpGroup) dpGroup.style.display = 'inline-flex';
+      });
+    });
+
+    // Confirm complete with selected date
+    document.querySelectorAll('.confirm-complete-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const questionId = parseInt(e.target.dataset.id);
+        const dateInput = document.getElementById(`dp-${questionId}`);
+        const selectedDate = dateInput ? dateInput.value : SpacedRepetitionEngine.getToday();
+        this.markCompleted(questionId, selectedDate);
+      });
+    });
+
+    // Cancel complete - hide date picker, show button again
+    document.querySelectorAll('.cancel-complete-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const questionId = parseInt(e.target.dataset.id);
+        const doneBtn = document.getElementById(`done-btn-${questionId}`);
+        const dpGroup = document.getElementById(`dp-group-${questionId}`);
+        if (doneBtn) doneBtn.style.display = 'inline-flex';
+        if (dpGroup) dpGroup.style.display = 'none';
       });
     });
 
@@ -644,17 +715,17 @@ const App = {
     });
   },
 
-  markCompleted(questionId) {
-    const today = SpacedRepetitionEngine.getToday();
+  markCompleted(questionId, completionDate) {
+    const dateToUse = completionDate || SpacedRepetitionEngine.getToday();
     if (!this.state.completedQuestions[questionId]) {
-      this.state.completedQuestions[questionId] = { date: today };
+      this.state.completedQuestions[questionId] = { date: dateToUse };
 
-      // Schedule first revision
-      this.state = SpacedRepetitionEngine.scheduleRevision(questionId, 'good', this.state);
+      // Schedule first revision from the completion date
+      this.state = SpacedRepetitionEngine.scheduleRevision(questionId, 'good', this.state, dateToUse);
 
       // Log activity
       this.state.history.push({
-        date: today,
+        date: dateToUse,
         questionId: questionId,
         feedback: 'completed',
         timestamp: Date.now()
@@ -673,7 +744,7 @@ const App = {
     questions.forEach(q => {
       if (!this.state.completedQuestions[q.id]) {
         this.state.completedQuestions[q.id] = { date: today };
-        this.state = SpacedRepetitionEngine.scheduleRevision(q.id, 'good', this.state);
+        this.state = SpacedRepetitionEngine.scheduleRevision(q.id, 'good', this.state, today);
         this.state.history.push({
           date: today,
           questionId: q.id,
@@ -797,6 +868,82 @@ const App = {
         </div>`;
       }).join('');
     }
+  },
+
+  // ==================== DECORATIVE WIDGETS ====================
+  clockInterval: null,
+  quoteInterval: null,
+
+  QUOTES: [
+    { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
+    { text: "First, solve the problem. Then, write the code.", author: "John Johnson" },
+    { text: "Code is like humor. When you have to explain it, it is bad.", author: "Cory House" },
+    { text: "Consistency is more important than intensity.", author: "Unknown" },
+    { text: "Every expert was once a beginner.", author: "Helen Hayes" },
+    { text: "Practice makes permanent, not perfect.", author: "Unknown" },
+    { text: "The best time to plant a tree was 20 years ago. The second best time is now.", author: "Chinese Proverb" },
+    { text: "Small daily improvements lead to stunning results.", author: "Robin Sharma" },
+    { text: "It does not matter how slowly you go as long as you do not stop.", author: "Confucius" },
+    { text: "Repetition is the mother of learning.", author: "Latin Proverb" }
+  ],
+
+  startClock() {
+    if (this.clockInterval) clearInterval(this.clockInterval);
+
+    const updateClock = () => {
+      const now = new Date();
+      const hours = now.getHours() % 12;
+      const minutes = now.getMinutes();
+      const seconds = now.getSeconds();
+
+      const hourDeg = (hours * 30) + (minutes * 0.5);
+      const minDeg = minutes * 6;
+      const secDeg = seconds * 6;
+
+      const hourHand = document.getElementById('clock-hour');
+      const minHand = document.getElementById('clock-minute');
+      const secHand = document.getElementById('clock-second');
+      const digital = document.getElementById('clock-digital');
+
+      if (hourHand) hourHand.style.transform = `rotate(${hourDeg}deg)`;
+      if (minHand) minHand.style.transform = `rotate(${minDeg}deg)`;
+      if (secHand) secHand.style.transform = `rotate(${secDeg}deg)`;
+      if (digital) {
+        digital.textContent = now.toLocaleTimeString('en-US', {
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+      }
+    };
+
+    updateClock();
+    this.clockInterval = setInterval(updateClock, 1000);
+  },
+
+  rotateQuote() {
+    if (this.quoteInterval) clearInterval(this.quoteInterval);
+
+    let currentIndex = Math.floor(Math.random() * this.QUOTES.length);
+
+    const showQuote = () => {
+      const textEl = document.getElementById('quote-text');
+      const authorEl = document.getElementById('quote-author');
+      if (!textEl || !authorEl) return;
+
+      textEl.classList.add('quote-fade-out');
+      authorEl.classList.add('quote-fade-out');
+
+      setTimeout(() => {
+        const quote = this.QUOTES[currentIndex];
+        textEl.textContent = `"${quote.text}"`;
+        authorEl.textContent = `- ${quote.author}`;
+        textEl.classList.remove('quote-fade-out');
+        authorEl.classList.remove('quote-fade-out');
+        currentIndex = (currentIndex + 1) % this.QUOTES.length;
+      }, 500);
+    };
+
+    showQuote();
+    this.quoteInterval = setInterval(showQuote, 8000);
   },
 
   showSaveError(message) {

@@ -866,3 +866,314 @@ a {
 a:hover {
   color: var(--accent-hover);
 }
+
+/* ==================== DATE PICKER GROUP ==================== */
+.date-picker-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.date-picker-input {
+  width: 140px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+/* ==================== DASHBOARD WIDGETS ==================== */
+.dashboard-widgets {
+  display: flex;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+/* Clock Widget */
+.clock-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.25rem;
+  min-width: 160px;
+  background: var(--neo-light-yellow) !important;
+}
+
+.clock-face {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+}
+
+.clock-hand {
+  position: absolute;
+  bottom: 50%;
+  left: 50%;
+  transform-origin: bottom center;
+  border-radius: 2px;
+}
+
+.clock-hour {
+  width: 4px;
+  height: 30px;
+  background: var(--text-primary);
+  margin-left: -2px;
+}
+
+.clock-minute {
+  width: 3px;
+  height: 40px;
+  background: var(--text-secondary);
+  margin-left: -1.5px;
+}
+
+.clock-second {
+  width: 1.5px;
+  height: 45px;
+  background: var(--danger);
+  margin-left: -0.75px;
+  transition: none;
+}
+
+.clock-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  background: var(--text-primary);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.clock-marker {
+  position: absolute;
+  background: var(--text-primary);
+  border-radius: 1px;
+}
+
+.clock-12 {
+  top: 6px;
+  left: 50%;
+  width: 3px;
+  height: 10px;
+  margin-left: -1.5px;
+}
+
+.clock-3 {
+  right: 6px;
+  top: 50%;
+  width: 10px;
+  height: 3px;
+  margin-top: -1.5px;
+}
+
+.clock-6 {
+  bottom: 6px;
+  left: 50%;
+  width: 3px;
+  height: 10px;
+  margin-left: -1.5px;
+}
+
+.clock-9 {
+  left: 6px;
+  top: 50%;
+  width: 10px;
+  height: 3px;
+  margin-top: -1.5px;
+}
+
+.clock-digital {
+  margin-top: 0.75rem;
+  font-family: monospace;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 1px;
+}
+
+/* Quote Widget */
+.quote-widget {
+  flex: 1;
+  min-width: 250px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1.5rem;
+  background: var(--neo-lavender) !important;
+}
+
+.quote-text {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--text-primary);
+  line-height: 1.5;
+  transition: opacity 0.5s ease;
+}
+
+.quote-author {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  transition: opacity 0.5s ease;
+}
+
+.quote-fade-out {
+  opacity: 0;
+}
+
+/* ==================== FLOATING SHAPES ==================== */
+.floating-shapes {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+  overflow: hidden;
+}
+
+.shape {
+  position: absolute;
+  opacity: 0.15;
+  border: 3px solid var(--border);
+}
+
+.shape-circle {
+  border-radius: 50%;
+}
+
+.shape-square {
+  border-radius: 4px;
+}
+
+.shape-triangle {
+  width: 0 !important;
+  height: 0 !important;
+  border: none;
+  border-left: 20px solid transparent;
+  border-right: 20px solid transparent;
+  border-bottom: 35px solid var(--neo-pink);
+  opacity: 0.12;
+}
+
+.shape-1 {
+  width: 60px;
+  height: 60px;
+  background: var(--neo-mint);
+  top: 15%;
+  left: 5%;
+  animation: float-1 12s ease-in-out infinite;
+}
+
+.shape-2 {
+  width: 40px;
+  height: 40px;
+  background: var(--neo-yellow);
+  top: 30%;
+  right: 8%;
+  animation: float-2 15s ease-in-out infinite;
+}
+
+.shape-3 {
+  width: 30px;
+  height: 30px;
+  background: var(--neo-sky);
+  top: 60%;
+  left: 12%;
+  animation: float-3 10s ease-in-out infinite;
+}
+
+.shape-4 {
+  top: 20%;
+  right: 15%;
+  animation: float-4 14s ease-in-out infinite;
+}
+
+.shape-5 {
+  width: 50px;
+  height: 50px;
+  background: var(--neo-peach);
+  top: 70%;
+  right: 5%;
+  animation: float-5 11s ease-in-out infinite;
+}
+
+.shape-6 {
+  width: 25px;
+  height: 25px;
+  background: var(--neo-purple);
+  top: 80%;
+  left: 30%;
+  animation: float-6 13s ease-in-out infinite;
+}
+
+@keyframes float-1 {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(15px, -20px) rotate(10deg); }
+  50% { transform: translate(-10px, -35px) rotate(-5deg); }
+  75% { transform: translate(20px, -15px) rotate(8deg); }
+}
+
+@keyframes float-2 {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  33% { transform: translate(-20px, 15px) rotate(15deg); }
+  66% { transform: translate(10px, -20px) rotate(-10deg); }
+}
+
+@keyframes float-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(20px, -25px) scale(1.1); }
+}
+
+@keyframes float-4 {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  25% { transform: translate(-10px, 20px) rotate(20deg); }
+  50% { transform: translate(15px, 10px) rotate(-15deg); }
+  75% { transform: translate(-5px, -15px) rotate(10deg); }
+}
+
+@keyframes float-5 {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(-25px, -20px) rotate(45deg); }
+}
+
+@keyframes float-6 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(15px, -10px) scale(1.2); }
+  66% { transform: translate(-10px, 15px) scale(0.9); }
+}
+
+/* Responsive adjustments for widgets */
+@media (max-width: 768px) {
+  .dashboard-widgets {
+    flex-direction: column;
+  }
+
+  .clock-widget {
+    min-width: auto;
+  }
+
+  .clock-face {
+    width: 100px;
+    height: 100px;
+  }
+
+  .clock-hour { height: 24px; }
+  .clock-minute { height: 32px; }
+  .clock-second { height: 37px; }
+}
+
+@media (max-width: 480px) {
+  .quote-text {
+    font-size: 0.95rem;
+  }
+}

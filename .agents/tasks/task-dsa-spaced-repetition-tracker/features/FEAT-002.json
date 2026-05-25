@@ -1,0 +1,30 @@
+{
+  "id": "FEAT-002",
+  "type": "feat",
+  "description": "Add adjustable completion date picker and decorative dashboard animations (clock widget, floating shapes, rotating quotes).",
+  "status": "in_progress",
+  "steps": [
+    "Modify the markCompleted function in app.js to show a date picker instead of immediately marking done with today's date",
+    "Update the scheduleRevision logic to use the selected date instead of today when scheduling first revision",
+    "Add an animated clock widget to the dashboard showing current time with a ticking second hand",
+    "Add floating/bouncing geometric shapes in the background using CSS animations",
+    "Add a rotating motivational quotes section on the dashboard",
+    "Add all required CSS for animations, clock, shapes, and date picker modal"
+  ],
+  "acceptance_criteria": [
+    "Clicking 'Mark Complete' in the Question Bank shows a date picker defaulting to today",
+    "Selecting a past date and confirming marks the question done with that date",
+    "Spaced repetition intervals are calculated from the selected date, not today",
+    "Dashboard displays an animated clock with a ticking second hand",
+    "Dashboard has subtle floating geometric shapes in neo-brutalism colors",
+    "Dashboard shows rotating motivational quotes",
+    "All animations are CSS-based with no external dependencies"
+  ],
+  "verification": [
+    "Open index.html and verify Mark Complete button shows date picker",
+    "Verify dashboard has animated clock and floating shapes",
+    "Verify no external URLs or CDN references added"
+  ],
+  "blocked_reason": null,
+  "findings": null
+}
