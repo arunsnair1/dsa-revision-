@@ -37,6 +37,12 @@ const DataManager = {
       localStorage.setItem(this.STORAGE_KEY, JSON.stringify(state));
     } catch (e) {
       console.error('Failed to save data:', e);
+      // Notify the user so they can export before data is lost
+      if (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014) {
+        App.showSaveError('Storage quota exceeded. Your latest changes may not persist after reload. Please export your data from Settings immediately.');
+      } else {
+        App.showSaveError('Failed to save data. Please export your data from Settings as a backup.');
+      }
     }
   },
 
@@ -47,11 +53,30 @@ const DataManager = {
   importData(jsonStr) {
     try {
       const data = JSON.parse(jsonStr);
-      if (data.completedQuestions && data.revisionSchedule) {
-        return data;
+      // Validate top-level structure
+      if (!data || typeof data !== 'object') return null;
+      if (!data.completedQuestions || typeof data.completedQuestions !== 'object') return null;
+      if (!Array.isArray(data.revisionSchedule)) return null;
+
+      // Validate each schedule entry has required numeric fields
+      for (const entry of data.revisionSchedule) {
+        if (!entry || typeof entry !== 'object') return null;
+        if (typeof entry.questionId !== 'number') return null;
+        if (typeof entry.intervalIndex !== 'number') return null;
+        if (typeof entry.nextReviewDate !== 'string') return null;
       }
+
+      // Ensure optional fields exist
+      if (!data.settings || typeof data.settings !== 'object') {
+        data.settings = this.getDefaultState().settings;
+      }
+      if (!Array.isArray(data.history)) {
+        data.history = [];
+      }
+
+      return data;
     } catch (e) {
-      // invalid
+      // invalid JSON
     }
     return null;
   },
@@ -123,28 +148,39 @@ const SpacedRepetitionEngine = {
 
       if (feedback === 'good' || feedback === 'easy') {
         existing.successCount = (existing.successCount || 0) + 1;
-      } else {
-        existing.successCount = Math.max(0, (existing.successCount || 0) - 1);
       }
+      // On 'struggled', only regress the interval index (done above).
+      // Do NOT decrement successCount to avoid asymmetric penalty
+      // that traps items below mastery after a single regression.
     }
 
     return state;
   },
 
   getToday() {
-    return new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   },
 
   addDays(dateStr, days) {
-    const d = new Date(dateStr);
+    const parts = dateStr.split('-');
+    const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
     d.setDate(d.getDate() + days);
-    return d.toISOString().split('T')[0];
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   },
 
   getDaysDiff(dateStr1, dateStr2) {
-    const d1 = new Date(dateStr1);
-    const d2 = new Date(dateStr2);
-    return Math.ceil((d2 - d1) / (1000 * 60 * 60 * 24));
+    const parts1 = dateStr1.split('-');
+    const parts2 = dateStr2.split('-');
+    const d1 = new Date(parseInt(parts1[0]), parseInt(parts1[1]) - 1, parseInt(parts1[2]));
+    const d2 = new Date(parseInt(parts2[0]), parseInt(parts2[1]) - 1, parseInt(parts2[2]));
+    return Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
   }
 };
 
@@ -194,10 +230,11 @@ const Scheduler = {
         scheduled.push(item);
         totalTime += item.timeEstimate;
       } else {
-        // If struggling and overdue, try to demote to read-notes to fit
+        // If re-solve, try to demote to read-notes to fit within budget
         if (item.type === 're-solve' && totalTime + TIME_READ_NOTES <= budget) {
           item.type = 'read-notes';
           item.timeEstimate = TIME_READ_NOTES;
+          item.demoted = true; // Flag so UI can show this was originally re-solve
           scheduled.push(item);
           totalTime += item.timeEstimate;
         } else {
@@ -207,6 +244,54 @@ const Scheduler = {
     }
 
     return { scheduled, deferred, totalTime, budget };
+  },
+
+  carryForwardDeferred(state) {
+    // Bump nextReviewDate of deferred items to tomorrow so they do not
+    // accumulate overdue counts and permanently block the schedule.
+    const today = SpacedRepetitionEngine.getToday();
+    const tomorrow = SpacedRepetitionEngine.addDays(today, 1);
+    const budget = state.settings.dailyBudget || DEFAULT_DAILY_BUDGET;
+
+    let dueItems = state.revisionSchedule
+      .filter(r => r.nextReviewDate <= today)
+      .map(r => {
+        const question = QUESTIONS.find(q => q.id === r.questionId);
+        const daysOverdue = SpacedRepetitionEngine.getDaysDiff(r.nextReviewDate, today);
+        return {
+          scheduleRef: r,
+          question: question,
+          daysOverdue: daysOverdue,
+          timeEstimate: r.type === 'read-notes' ? TIME_READ_NOTES : TIME_RE_SOLVE
+        };
+      })
+      .filter(r => r.question);
+
+    dueItems.sort((a, b) => {
+      if (a.daysOverdue !== b.daysOverdue) return b.daysOverdue - a.daysOverdue;
+      if (a.scheduleRef.lastFeedback === 'struggled' && b.scheduleRef.lastFeedback !== 'struggled') return -1;
+      if (b.scheduleRef.lastFeedback === 'struggled' && a.scheduleRef.lastFeedback !== 'struggled') return 1;
+      return 0;
+    });
+
+    let totalTime = 0;
+    for (const item of dueItems) {
+      const itemTime = item.scheduleRef.type === 'read-notes' ? TIME_READ_NOTES : TIME_RE_SOLVE;
+      if (totalTime + itemTime <= budget) {
+        totalTime += itemTime;
+      } else {
+        // Try demotion
+        if (item.scheduleRef.type === 're-solve' && totalTime + TIME_READ_NOTES <= budget) {
+          totalTime += TIME_READ_NOTES;
+        } else {
+          // This item is deferred - carry forward to tomorrow
+          item.scheduleRef.nextReviewDate = tomorrow;
+          item.scheduleRef.deferred = true;
+        }
+      }
+    }
+
+    return state;
   }
 };
 
@@ -264,6 +349,9 @@ const App = {
 
   init() {
     this.state = DataManager.load();
+    // Carry forward any deferred items from previous sessions
+    this.state = Scheduler.carryForwardDeferred(this.state);
+    DataManager.save(this.state);
     this.bindNavigation();
     this.bindEvents();
     this.renderHeader();
@@ -431,10 +519,12 @@ const App = {
   renderReviewItem(item, isDeferred) {
     const overdueText = item.daysOverdue > 0 ? `<span style="color:var(--danger)">${item.daysOverdue}d overdue</span>` : '';
     const masteryClass = item.mastery.toLowerCase();
+    const demotedBadge = item.demoted ? `<span class="badge badge-demoted" title="Originally scheduled as re-solve, demoted to fit budget">demoted</span>` : '';
 
     return `<div class="review-item ${isDeferred ? 'deferred' : ''}">
       <div class="review-item-left">
         <span class="badge badge-${masteryClass}">${item.mastery}</span>
+        ${demotedBadge}
         <div>
           <div class="review-item-title">${item.question.title}</div>
           <div class="review-item-meta">${item.question.category} ${overdueText}</div>
@@ -707,6 +797,26 @@ const App = {
         </div>`;
       }).join('');
     }
+  },
+
+  showSaveError(message) {
+    // Show a non-blocking notification banner for save errors
+    let banner = document.getElementById('save-error-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'save-error-banner';
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:0.75rem 1rem;background:var(--danger, #e74c3c);color:#fff;text-align:center;z-index:10000;font-size:0.875rem;';
+      const closeBtn = document.createElement('button');
+      closeBtn.textContent = '\u00d7';
+      closeBtn.style.cssText = 'position:absolute;right:1rem;top:50%;transform:translateY(-50%);background:none;border:none;color:#fff;font-size:1.25rem;cursor:pointer;';
+      closeBtn.addEventListener('click', () => banner.remove());
+      banner.appendChild(closeBtn);
+      document.body.prepend(banner);
+    }
+    // Set message as first text node
+    banner.childNodes[0] && banner.childNodes[0].nodeType === 3
+      ? banner.childNodes[0].textContent = message
+      : banner.insertBefore(document.createTextNode(message), banner.firstChild);
   },
 
   showModal(message, onConfirm) {

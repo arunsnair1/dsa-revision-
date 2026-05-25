@@ -188,6 +188,7 @@ body {
 .badge-reviewing { background: var(--mastery-reviewing); color: #1a1a2e; }
 .badge-mastered { background: var(--mastery-mastered); color: #1a1a2e; }
 .badge-deferred { background: var(--text-muted); color: #fff; }
+.badge-demoted { background: var(--warning); color: #1a1a2e; font-size: 0.625rem; }
 
 /* Buttons */
 .btn {

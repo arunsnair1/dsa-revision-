@@ -226,5 +226,24 @@ const TIME_RE_SOLVE = 20;
 // Daily time budget in minutes
 const DEFAULT_DAILY_BUDGET = 180;
 
-// Deadline
-const DEADLINE = "2025-06-25";
+// Deadline - defaults to 30 days from first use if the hardcoded date has passed
+const HARDCODED_DEADLINE = "2025-06-25";
+
+function getDefaultDeadline() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const today = `${year}-${month}-${day}`;
+  if (HARDCODED_DEADLINE >= today) {
+    return HARDCODED_DEADLINE;
+  }
+  // Deadline has passed; default to 30 days from now
+  const future = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const fy = future.getFullYear();
+  const fm = String(future.getMonth() + 1).padStart(2, '0');
+  const fd = String(future.getDate()).padStart(2, '0');
+  return `${fy}-${fm}-${fd}`;
+}
+
+const DEADLINE = getDefaultDeadline();
