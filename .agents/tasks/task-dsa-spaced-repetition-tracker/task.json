@@ -2,7 +2,7 @@
   "task_id": "task-dsa-spaced-repetition-tracker",
   "task_description": "Build a DSA Spaced Repetition Tracker website as a static SPA (vanilla HTML/CSS/JS) that helps a user track revision scheduling for Neetcode 150 questions. Uses spaced repetition with Ebbinghaus forgetting curve intervals, respects a 3-hour daily time budget, and provides a daily dashboard showing what to review.",
   "status": "completed",
-  "feature_order": ["FEAT-001", "FEAT-002"],
+  "feature_order": ["FEAT-001", "FEAT-002", "FEAT-003"],
   "blocked_reason": null,
   "verification": {
     "build": "pass",
