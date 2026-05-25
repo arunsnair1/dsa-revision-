@@ -8,7 +8,8 @@ const DataManager = {
       revisionSchedule: [],
       settings: {
         dailyBudget: DEFAULT_DAILY_BUDGET,
-        deadline: DEADLINE
+        deadline: DEADLINE,
+        autoStartTimer: false
       },
       history: []
     };
@@ -22,6 +23,10 @@ const DataManager = {
         // Ensure settings exist
         if (!parsed.settings) {
           parsed.settings = this.getDefaultState().settings;
+        }
+        // Ensure autoStartTimer key exists for older data
+        if (parsed.settings.autoStartTimer === undefined) {
+          parsed.settings.autoStartTimer = false;
         }
         if (!parsed.history) parsed.history = [];
         return parsed;
@@ -381,6 +386,11 @@ const App = {
       this.renderHeader();
     });
 
+    document.getElementById('autostart-timer-input').addEventListener('change', (e) => {
+      this.state.settings.autoStartTimer = e.target.checked;
+      DataManager.save(this.state);
+    });
+
     document.getElementById('export-btn').addEventListener('click', () => {
       const data = DataManager.exportData(this.state);
       document.getElementById('import-export-area').value = data;
@@ -477,6 +487,7 @@ const App = {
         <div class="clock-marker clock-9"></div>
       </div>
       <div class="clock-digital" id="clock-digital"></div>
+      <button class="btn btn-sm btn-primary clock-toggle-btn" id="clock-toggle-btn">${this.clockInterval ? 'Stop' : 'Start'}</button>
     </div>`;
 
     // Motivational quote widget
@@ -550,7 +561,10 @@ const App = {
 
     container.innerHTML = html;
     this.bindDashboardEvents();
-    this.startClock();
+    if (this.state.settings.autoStartTimer || this.clockManuallyStarted) {
+      this.startClock();
+    }
+    this.bindClockToggle();
     this.rotateQuote();
   },
 
@@ -872,6 +886,7 @@ const App = {
   renderSettings() {
     document.getElementById('budget-input').value = this.state.settings.dailyBudget || DEFAULT_DAILY_BUDGET;
     document.getElementById('deadline-input').value = this.state.settings.deadline || DEADLINE;
+    document.getElementById('autostart-timer-input').checked = !!this.state.settings.autoStartTimer;
 
     // Render history
     const historyContainer = document.getElementById('history-log');
@@ -894,6 +909,7 @@ const App = {
   // ==================== DECORATIVE WIDGETS ====================
   clockInterval: null,
   quoteInterval: null,
+  clockManuallyStarted: false,
 
   QUOTES: [
     { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
@@ -938,6 +954,32 @@ const App = {
 
     updateClock();
     this.clockInterval = setInterval(updateClock, 1000);
+    const toggleBtn = document.getElementById('clock-toggle-btn');
+    if (toggleBtn) toggleBtn.textContent = 'Stop';
+  },
+
+  stopClock() {
+    if (this.clockInterval) {
+      clearInterval(this.clockInterval);
+      this.clockInterval = null;
+    }
+    this.clockManuallyStarted = false;
+    const toggleBtn = document.getElementById('clock-toggle-btn');
+    if (toggleBtn) toggleBtn.textContent = 'Start';
+  },
+
+  bindClockToggle() {
+    const toggleBtn = document.getElementById('clock-toggle-btn');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', () => {
+        if (this.clockInterval) {
+          this.stopClock();
+        } else {
+          this.clockManuallyStarted = true;
+          this.startClock();
+        }
+      });
+    }
   },
 
   rotateQuote() {
