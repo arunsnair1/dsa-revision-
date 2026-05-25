@@ -246,31 +246,41 @@ const Scheduler = {
     return { scheduled, deferred, totalTime, budget };
   },
 
-  getBonusItems(state) {
+  getBonusItems(state, timerRemainingMinutes) {
     const today = SpacedRepetitionEngine.getToday();
     const tomorrow = SpacedRepetitionEngine.addDays(today, 1);
-    const budget = state.settings.dailyBudget || DEFAULT_DAILY_BUDGET;
+
+    // Use actual timer remaining time if provided, otherwise fall back to budget-based calculation
+    let remainingTime;
+    if (typeof timerRemainingMinutes === 'number' && timerRemainingMinutes >= 0) {
+      remainingTime = timerRemainingMinutes;
+    } else {
+      const budget = state.settings.dailyBudget || DEFAULT_DAILY_BUDGET;
+      const todayHistory = state.history.filter(h => h.date === today && h.feedback !== 'completed');
+      const reviewedToday = new Set();
+      let timeUsed = 0;
+
+      todayHistory.forEach(h => {
+        if (!reviewedToday.has(h.questionId)) {
+          reviewedToday.add(h.questionId);
+          const schedItem = state.revisionSchedule.find(r => r.questionId === h.questionId);
+          if (schedItem && schedItem.type === 'read-notes') {
+            timeUsed += TIME_READ_NOTES;
+          } else {
+            timeUsed += TIME_RE_SOLVE;
+          }
+        }
+      });
+
+      remainingTime = budget - timeUsed;
+    }
+
+    if (remainingTime < TIME_READ_NOTES) return [];
 
     // Determine which items were already reviewed today
     const todayHistory = state.history.filter(h => h.date === today && h.feedback !== 'completed');
     const reviewedToday = new Set();
-    let timeUsed = 0;
-
-    todayHistory.forEach(h => {
-      if (!reviewedToday.has(h.questionId)) {
-        reviewedToday.add(h.questionId);
-        // Estimate time spent: use current item type as best proxy
-        const schedItem = state.revisionSchedule.find(r => r.questionId === h.questionId);
-        if (schedItem && schedItem.type === 'read-notes') {
-          timeUsed += TIME_READ_NOTES;
-        } else {
-          timeUsed += TIME_RE_SOLVE;
-        }
-      }
-    });
-
-    const remainingTime = budget - timeUsed;
-    if (remainingTime < TIME_READ_NOTES) return [];
+    todayHistory.forEach(h => reviewedToday.add(h.questionId));
 
     const bonusItems = [];
     let bonusTimeUsed = 0;
@@ -436,6 +446,150 @@ const ProgressTracker = {
   }
 };
 
+// ==================== STUDY TIMER ====================
+const StudyTimer = {
+  totalSeconds: 0,
+  remainingSeconds: 0,
+  intervalId: null,
+  isRunning: false,
+  isPaused: false,
+  hasStarted: false,
+
+  init() {
+    this.bindEvents();
+    this.updateDisplay();
+  },
+
+  bindEvents() {
+    document.getElementById('timer-start-btn').addEventListener('click', () => this.start());
+    document.getElementById('timer-pause-btn').addEventListener('click', () => this.pause());
+    document.getElementById('timer-resume-btn').addEventListener('click', () => this.resume());
+    document.getElementById('timer-reset-btn').addEventListener('click', () => this.reset());
+  },
+
+  start() {
+    const hours = parseInt(document.getElementById('timer-hours').value) || 0;
+    const minutes = parseInt(document.getElementById('timer-minutes').value) || 0;
+    this.totalSeconds = (hours * 60 + minutes) * 60;
+
+    if (this.totalSeconds <= 0) return;
+
+    this.remainingSeconds = this.totalSeconds;
+    this.hasStarted = true;
+    this.isRunning = true;
+    this.isPaused = false;
+
+    this.updateUI();
+    this.tick();
+    this.intervalId = setInterval(() => this.tick(), 1000);
+  },
+
+  pause() {
+    this.isRunning = false;
+    this.isPaused = true;
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    this.updateUI();
+  },
+
+  resume() {
+    this.isRunning = true;
+    this.isPaused = false;
+    this.updateUI();
+    this.intervalId = setInterval(() => this.tick(), 1000);
+  },
+
+  reset() {
+    // Only available before timer has started
+    if (this.hasStarted) return;
+    this.totalSeconds = 0;
+    this.remainingSeconds = 0;
+    this.isRunning = false;
+    this.isPaused = false;
+    document.getElementById('timer-hours').value = 3;
+    document.getElementById('timer-minutes').value = 0;
+    this.updateDisplay();
+    this.updateUI();
+  },
+
+  tick() {
+    if (this.remainingSeconds > 0) {
+      this.remainingSeconds--;
+      this.updateDisplay();
+    }
+    if (this.remainingSeconds <= 0) {
+      this.isRunning = false;
+      if (this.intervalId) {
+        clearInterval(this.intervalId);
+        this.intervalId = null;
+      }
+      this.updateUI();
+      // Refresh bonus items when timer finishes
+      App.renderDashboard();
+    }
+  },
+
+  updateDisplay() {
+    const h = Math.floor(this.remainingSeconds / 3600);
+    const m = Math.floor((this.remainingSeconds % 3600) / 60);
+    const s = this.remainingSeconds % 60;
+    const display = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+    document.getElementById('timer-value').textContent = display;
+  },
+
+  updateUI() {
+    const section = document.getElementById('timer-section');
+    const startBtn = document.getElementById('timer-start-btn');
+    const pauseBtn = document.getElementById('timer-pause-btn');
+    const resumeBtn = document.getElementById('timer-resume-btn');
+    const resetBtn = document.getElementById('timer-reset-btn');
+    const setup = document.getElementById('timer-setup');
+
+    section.classList.remove('timer-running', 'timer-paused', 'timer-finished');
+
+    if (!this.hasStarted) {
+      // Before starting: show setup, start, and reset
+      setup.style.display = 'flex';
+      startBtn.style.display = 'inline-flex';
+      pauseBtn.style.display = 'none';
+      resumeBtn.style.display = 'none';
+      resetBtn.style.display = 'inline-flex';
+    } else if (this.isRunning) {
+      // Running: hide setup, reset; show pause only
+      setup.style.display = 'none';
+      startBtn.style.display = 'none';
+      pauseBtn.style.display = 'inline-flex';
+      resumeBtn.style.display = 'none';
+      resetBtn.style.display = 'none';
+      section.classList.add('timer-running');
+    } else if (this.isPaused) {
+      // Paused: hide setup, reset; show resume only
+      setup.style.display = 'none';
+      startBtn.style.display = 'none';
+      pauseBtn.style.display = 'none';
+      resumeBtn.style.display = 'inline-flex';
+      resetBtn.style.display = 'none';
+      section.classList.add('timer-paused');
+    } else if (this.remainingSeconds <= 0 && this.hasStarted) {
+      // Finished: time is up
+      setup.style.display = 'none';
+      startBtn.style.display = 'none';
+      pauseBtn.style.display = 'none';
+      resumeBtn.style.display = 'none';
+      resetBtn.style.display = 'none';
+      section.classList.add('timer-finished');
+    }
+  },
+
+  getRemainingMinutes() {
+    // Returns remaining time in minutes (rounded down) from the actual timer
+    if (!this.hasStarted) return 0;
+    return Math.floor(this.remainingSeconds / 60);
+  }
+};
+
 // ==================== UI CONTROLLER ====================
 const App = {
   state: null,
@@ -448,6 +602,7 @@ const App = {
     this.bindNavigation();
     this.bindEvents();
     this.renderHeader();
+    StudyTimer.init();
     this.showView('dashboard');
   },
 
@@ -605,16 +760,21 @@ const App = {
       }
     }
 
-    // Bonus/Extra Reviews: show when all scheduled items are done and time remains
+    // Bonus/Extra Reviews: show when all scheduled items are done and timer has time remaining
     if (scheduled.length === 0 && totalTime === 0) {
       const todayReviewCount = this.state.history.filter(h => h.date === SpacedRepetitionEngine.getToday() && h.feedback !== 'completed').length;
       if (todayReviewCount > 0) {
-        const bonusItems = Scheduler.getBonusItems(this.state);
+        // Use actual timer remaining time if timer has been started
+        const timerMinutes = StudyTimer.hasStarted ? StudyTimer.getRemainingMinutes() : undefined;
+        const bonusItems = Scheduler.getBonusItems(this.state, timerMinutes);
         if (bonusItems.length > 0) {
           const bonusTime = bonusItems.reduce((sum, i) => sum + i.timeEstimate, 0);
+          const remainingLabel = StudyTimer.hasStarted
+            ? `${StudyTimer.getRemainingMinutes()} min remaining on timer`
+            : `${bonusTime} min of bonus reviews`;
           html += `<div class="dashboard-section">
             <div class="section-title">Extra Reviews</div>
-            <p class="section-subtitle">You finished all scheduled items! Here are bonus reviews that fit your remaining time (${bonusTime} min)</p>
+            <p class="section-subtitle">You finished all scheduled items! Here are bonus reviews that fit your remaining time (${remainingLabel})</p>
             ${bonusItems.map(item => this.renderBonusItem(item)).join('')}
           </div>`;
         }

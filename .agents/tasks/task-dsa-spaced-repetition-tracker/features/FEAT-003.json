@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-003",
+  "type": "feat",
+  "description": "Add timer UI with modified behavior (no reset after start, only pause/play) and dynamic bonus items based on actual timer remaining time.",
+  "status": "in_progress",
+  "steps": [
+    "Add timer UI to the dashboard in index.html with time inputs (hours/minutes), start/pause/play buttons, and a reset button that hides once timer starts",
+    "Implement StudyTimer module in app.js with countdown logic, pause/resume, and session-based state (resets on fresh page load)",
+    "Modify bonus items logic to read actual timer remaining seconds and dynamically fill bonus items based on real remaining time",
+    "Add timer styling to style.css matching the existing dark theme",
+    "Ensure bonus items still use the exact same SpacedRepetitionEngine.scheduleRevision() and history logging as regular items"
+  ],
+  "acceptance_criteria": [
+    "Timer shows on dashboard with configurable hours/minutes before starting",
+    "Once timer starts, the reset button is hidden/removed; only pause and play are available",
+    "Timer resets fresh on page load (new session/day)",
+    "When all scheduled items are completed, bonus items are calculated based on actual timer remaining time",
+    "Bonus items are dynamically filled: deferred items first, then items due tomorrow, sorted by overdue first then struggled",
+    "No changes to spaced repetition intervals, feedback logic, mastery levels, or scheduling logic",
+    "Bonus items use the exact same SpacedRepetitionEngine.scheduleRevision() and handleFeedback flow"
+  ],
+  "verification": [
+    "Verify JS syntax with node --check app.js",
+    "Verify no external URLs added",
+    "Verify spaced repetition logic is unchanged"
+  ],
+  "blocked_reason": null,
+  "findings": null
+}
