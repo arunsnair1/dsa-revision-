@@ -1,0 +1,37 @@
+{
+  "id": "FEAT-001",
+  "type": "feat",
+  "description": "Build the complete DSA Spaced Repetition Tracker as a static SPA with all core functionality: Neetcode 150 question bank, spaced repetition scheduling engine, daily dashboard, progress tracking, and time-budget management. Since this is a greenfield vanilla HTML/CSS/JS project with no build step, the entire application can be delivered as one coherent feature.",
+  "status": "in_progress",
+  "steps": [
+    "Create data.js - Define the complete Neetcode 150 question bank as a JavaScript array/object, organized by 18 categories (Arrays & Hashing, Two Pointers, Sliding Window, Stack, Binary Search, Linked List, Trees, Tries, Heap/Priority Queue, Backtracking, Graphs, Advanced Graphs, 1D DP, 2D DP, Greedy, Intervals, Math & Geometry, Bit Manipulation). Each question should have: id, title, category, difficulty, estimated time (minutes), and neetcode URL.",
+    "Create app.js - Implement the core application logic with these modules: (A) SpacedRepetitionEngine - manages intervals based on Ebbinghaus forgetting curve (Day 1, 3, 7, 14, 30), adjusts intervals based on feedback (struggled=shorter, easy=longer), determines mastery levels (New, Learning, Reviewing, Mastered). (B) Scheduler - calculates what is due today, respects 3-hour (180 min) daily time budget, estimates 5 min for 'read notes' and 20 min for 're-solve', prioritizes by urgency (overdue first, then due today), batches same-pattern items together, pushes overflow to next day. (C) ProgressTracker - tracks completion toward 150 questions, revision coverage, deadline countdown to June 25. (D) DataManager - handles all localStorage CRUD operations for user progress data. (E) UI Controller - manages rendering, event handling, navigation between views.",
+    "Create style.css - Dark mode design with: CSS custom properties for theming, responsive layout (mobile-first), clean card-based UI for daily items, progress bars, color-coded mastery levels and priorities, smooth transitions, readable typography without external fonts (use system font stack).",
+    "Create index.html - Entry point that links style.css and loads data.js then app.js. Structure includes: (A) Navigation/header with date and deadline countdown, (B) Daily Dashboard view - shows today's review items split into 'Read Notes' and 'Re-solve' sections with time estimates and total time, (C) Question Bank view - browse all 150 questions by category, mark as completed with date, (D) Progress view - overall stats, mastery breakdown, calendar heatmap of activity, deadline warnings, (E) Settings/Log view - adjust daily time budget, view revision history.",
+    "Implement the daily input flow: User navigates to Question Bank, selects a category, and marks questions as 'completed today'. This triggers the spaced repetition engine to schedule the first revision (Day 1 = tomorrow). Support marking entire patterns as done in one batch.",
+    "Implement the revision feedback flow: When reviewing items on the dashboard, user can mark each as 'Easy' (increase interval, move toward Mastered), 'Good' (normal interval progression), or 'Struggled' (decrease interval, schedule sooner, mark as 're-solve' next time). Update mastery level accordingly.",
+    "Implement smart scheduling: When daily load exceeds 3 hours, (1) prioritize overdue items first, (2) prioritize 'struggled' items, (3) batch same-category items, (4) demote well-retained items to 'read notes' instead of 're-solve', (5) defer lowest-priority items to tomorrow with a visual indicator showing what was deferred. Show a warning banner if the user is falling behind the June 25 deadline based on remaining questions and available days.",
+    "Implement localStorage persistence: Save all user state (completed questions, revision schedules, mastery levels, feedback history) to localStorage. Load on startup. Include an export/import JSON feature for backup. Include a reset button with confirmation."
+  ],
+  "acceptance_criteria": [
+    "Opening index.html in a browser shows the daily dashboard with today's date and a countdown to June 25",
+    "The Question Bank view lists all 150 Neetcode questions organized into 18 categories",
+    "Marking a question as completed schedules revision at Day 1, 3, 7, 14, 30 intervals",
+    "The daily dashboard shows items due today split into 'Read Notes' and 'Re-solve' sections",
+    "Total estimated time shown does not exceed 180 minutes (3 hours); overflow items are marked as deferred",
+    "Marking a revision as 'Struggled' shortens the next interval; 'Easy' lengthens it",
+    "Mastery levels progress from New to Learning to Reviewing to Mastered based on successful revisions",
+    "Progress view shows completion percentage, mastery breakdown, and deadline status",
+    "All data persists across page refreshes via localStorage",
+    "UI is dark mode, responsive, and usable on mobile screens",
+    "No external dependencies - works completely offline with no network requests"
+  ],
+  "verification": [
+    "Open index.html in a browser (or use a simple file validation approach) to confirm it loads without errors",
+    "Verify no external URLs or CDN references exist in the source files (grep for http:// and https://)",
+    "Verify all 150 Neetcode questions are present in data.js by checking the count",
+    "Verify the spaced repetition logic produces correct intervals by reading the scheduling code"
+  ],
+  "blocked_reason": null,
+  "findings": ""
+}

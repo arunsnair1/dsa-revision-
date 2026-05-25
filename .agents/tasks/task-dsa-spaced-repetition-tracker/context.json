@@ -1,0 +1,16 @@
+{
+  "project_type": "Static single-page application (vanilla HTML/CSS/JS)",
+  "language": "JavaScript (ES6+), HTML5, CSS3",
+  "build_system": "None - no build step required. Open index.html directly or serve via GitHub Pages.",
+  "test_framework": "None - manual browser testing. Validation via opening index.html.",
+  "build_command": "N/A (static files)",
+  "test_command": "N/A (open index.html in browser)",
+  "verification_instructions": "Open index.html in a browser and verify: (1) Dashboard loads with today's date and countdown, (2) Can mark questions as completed, (3) Spaced repetition schedules appear on future days, (4) localStorage persists data across refresh, (5) 3-hour constraint is respected in daily view.",
+  "snapshot_or_generated_files": null,
+  "setup_instructions": "No setup required. All files are static HTML/CSS/JS.",
+  "environment_constraints": "INTEGRATIONS_ONLY network mode - no external CDNs, no npm packages, no external fonts or icons. Everything must be self-contained in vanilla HTML/CSS/JS. No build tools available.",
+  "contribution_requirements": "N/A - greenfield project",
+  "key_patterns": "Single index.html with embedded or linked CSS/JS. localStorage for all persistence. No frameworks. Dark mode UI. Mobile-responsive.",
+  "relevant_files": ["index.html", "style.css", "app.js", "data.js"],
+  "directory_structure": "Flat structure: index.html (entry point), style.css (styles), app.js (application logic), data.js (Neetcode 150 question bank)"
+}
