@@ -246,6 +246,99 @@ const Scheduler = {
     return { scheduled, deferred, totalTime, budget };
   },
 
+  getBonusItems(state) {
+    const today = SpacedRepetitionEngine.getToday();
+    const tomorrow = SpacedRepetitionEngine.addDays(today, 1);
+    const budget = state.settings.dailyBudget || DEFAULT_DAILY_BUDGET;
+
+    // Determine which items were already reviewed today
+    const todayHistory = state.history.filter(h => h.date === today && h.feedback !== 'completed');
+    const reviewedToday = new Set();
+    let timeUsed = 0;
+
+    todayHistory.forEach(h => {
+      if (!reviewedToday.has(h.questionId)) {
+        reviewedToday.add(h.questionId);
+        // Estimate time spent: use current item type as best proxy
+        const schedItem = state.revisionSchedule.find(r => r.questionId === h.questionId);
+        if (schedItem && schedItem.type === 'read-notes') {
+          timeUsed += TIME_READ_NOTES;
+        } else {
+          timeUsed += TIME_RE_SOLVE;
+        }
+      }
+    });
+
+    const remainingTime = budget - timeUsed;
+    if (remainingTime < TIME_READ_NOTES) return [];
+
+    const bonusItems = [];
+    let bonusTimeUsed = 0;
+
+    // First: pull from deferred items (items still due today that were not reviewed)
+    const dueToday = state.revisionSchedule
+      .filter(r => r.nextReviewDate <= today)
+      .filter(r => !reviewedToday.has(r.questionId))
+      .map(r => {
+        const question = QUESTIONS.find(q => q.id === r.questionId);
+        return {
+          ...r,
+          question: question,
+          daysOverdue: SpacedRepetitionEngine.getDaysDiff(r.nextReviewDate, today),
+          timeEstimate: r.type === 'read-notes' ? TIME_READ_NOTES : TIME_RE_SOLVE,
+          mastery: SpacedRepetitionEngine.getMasteryLevel(r),
+          bonusSource: 'deferred'
+        };
+      })
+      .filter(r => r.question);
+
+    dueToday.sort((a, b) => {
+      if (a.daysOverdue !== b.daysOverdue) return b.daysOverdue - a.daysOverdue;
+      if (a.lastFeedback === 'struggled' && b.lastFeedback !== 'struggled') return -1;
+      if (b.lastFeedback === 'struggled' && a.lastFeedback !== 'struggled') return 1;
+      return 0;
+    });
+
+    for (const item of dueToday) {
+      if (bonusTimeUsed + item.timeEstimate <= remainingTime) {
+        bonusItems.push(item);
+        bonusTimeUsed += item.timeEstimate;
+      }
+    }
+
+    // Second: pull from items due tomorrow
+    const dueTomorrow = state.revisionSchedule
+      .filter(r => r.nextReviewDate === tomorrow)
+      .filter(r => !reviewedToday.has(r.questionId))
+      .map(r => {
+        const question = QUESTIONS.find(q => q.id === r.questionId);
+        return {
+          ...r,
+          question: question,
+          daysOverdue: 0,
+          timeEstimate: r.type === 'read-notes' ? TIME_READ_NOTES : TIME_RE_SOLVE,
+          mastery: SpacedRepetitionEngine.getMasteryLevel(r),
+          bonusSource: 'tomorrow'
+        };
+      })
+      .filter(r => r.question);
+
+    dueTomorrow.sort((a, b) => {
+      if (a.lastFeedback === 'struggled' && b.lastFeedback !== 'struggled') return -1;
+      if (b.lastFeedback === 'struggled' && a.lastFeedback !== 'struggled') return 1;
+      return a.question.category.localeCompare(b.question.category);
+    });
+
+    for (const item of dueTomorrow) {
+      if (bonusTimeUsed + item.timeEstimate <= remainingTime) {
+        bonusItems.push(item);
+        bonusTimeUsed += item.timeEstimate;
+      }
+    }
+
+    return bonusItems;
+  },
+
   carryForwardDeferred(state) {
     // Bump nextReviewDate of deferred items to tomorrow so they do not
     // accumulate overdue counts and permanently block the schedule.
@@ -512,6 +605,22 @@ const App = {
       }
     }
 
+    // Bonus/Extra Reviews: show when all scheduled items are done and time remains
+    if (scheduled.length === 0 && totalTime === 0) {
+      const todayReviewCount = this.state.history.filter(h => h.date === SpacedRepetitionEngine.getToday() && h.feedback !== 'completed').length;
+      if (todayReviewCount > 0) {
+        const bonusItems = Scheduler.getBonusItems(this.state);
+        if (bonusItems.length > 0) {
+          const bonusTime = bonusItems.reduce((sum, i) => sum + i.timeEstimate, 0);
+          html += `<div class="dashboard-section">
+            <div class="section-title">Extra Reviews</div>
+            <p class="section-subtitle">You finished all scheduled items! Here are bonus reviews that fit your remaining time (${bonusTime} min)</p>
+            ${bonusItems.map(item => this.renderBonusItem(item)).join('')}
+          </div>`;
+        }
+      }
+    }
+
     container.innerHTML = html;
     this.bindDashboardEvents();
   },
@@ -535,6 +644,27 @@ const App = {
         <button class="btn btn-sm btn-primary" data-action="feedback" data-id="${item.questionId}" data-feedback="good">Good</button>
         <button class="btn btn-sm btn-warning" data-action="feedback" data-id="${item.questionId}" data-feedback="struggled">Struggled</button>
       </div>` : `<span class="badge badge-deferred">Deferred</span>`}
+    </div>`;
+  },
+
+  renderBonusItem(item) {
+    const masteryClass = item.mastery.toLowerCase();
+    const sourceLabel = item.bonusSource === 'deferred' ? 'deferred' : 'due tomorrow';
+
+    return `<div class="review-item bonus-item">
+      <div class="review-item-left">
+        <span class="badge badge-${masteryClass}">${item.mastery}</span>
+        <span class="badge badge-bonus">${sourceLabel}</span>
+        <div>
+          <div class="review-item-title">${item.question.title}</div>
+          <div class="review-item-meta">${item.question.category} &middot; ${item.type === 'read-notes' ? TIME_READ_NOTES : TIME_RE_SOLVE} min (${item.type})</div>
+        </div>
+      </div>
+      <div class="review-item-actions">
+        <button class="btn btn-sm btn-success" data-action="feedback" data-id="${item.questionId}" data-feedback="easy">Easy</button>
+        <button class="btn btn-sm btn-primary" data-action="feedback" data-id="${item.questionId}" data-feedback="good">Good</button>
+        <button class="btn btn-sm btn-warning" data-action="feedback" data-id="${item.questionId}" data-feedback="struggled">Struggled</button>
+      </div>
     </div>`;
   },
 

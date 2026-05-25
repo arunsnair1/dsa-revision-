@@ -189,6 +189,7 @@ body {
 .badge-mastered { background: var(--mastery-mastered); color: #1a1a2e; }
 .badge-deferred { background: var(--text-muted); color: #fff; }
 .badge-demoted { background: var(--warning); color: #1a1a2e; font-size: 0.625rem; }
+.badge-bonus { background: var(--accent); color: #1a1a2e; font-size: 0.625rem; }
 
 /* Buttons */
 .btn {
@@ -301,6 +302,10 @@ body {
 .review-item.deferred {
   opacity: 0.5;
   border-style: dashed;
+}
+
+.review-item.bonus-item {
+  border-left: 3px solid var(--accent);
 }
 
 .review-item-left {
