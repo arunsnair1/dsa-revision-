@@ -602,7 +602,25 @@ const App = {
     this.renderDashboard();
   },
 
+  getExpandedCategories() {
+    const expanded = [];
+    document.querySelectorAll('.category-questions.expanded').forEach(el => {
+      expanded.push(el.id);
+    });
+    return expanded;
+  },
+
+  restoreExpandedCategories(expandedIds) {
+    expandedIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('expanded');
+    });
+  },
+
   renderQuestionBank() {
+    // Save expanded state before re-rendering
+    const expandedCategories = this.getExpandedCategories();
+
     const container = document.getElementById('questions-content');
     let html = '';
 
@@ -631,6 +649,9 @@ const App = {
 
     container.innerHTML = html;
     this.bindQuestionBankEvents();
+
+    // Restore expanded state after re-rendering
+    this.restoreExpandedCategories(expandedCategories);
   },
 
   renderQuestionItem(q) {
