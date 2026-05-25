@@ -33,5 +33,5 @@
     "Verify the spaced repetition logic produces correct intervals by reading the scheduling code"
   ],
   "blocked_reason": null,
-  "findings": "All 150 Neetcode questions verified across 18 categories. JS syntax passes node --check. Spaced repetition intervals work correctly: Good advances +1, Easy advances +2, Struggled goes back -1. Time budget constraint properly enforced (tested with 15 items at 300min, only 9 scheduled within 180min). The neetcode.io URLs in data.js are reference-only string data, never fetched by the app. NODE_OPTIONS must be cleared to run node in this sandbox due to missing proxy-bootstrap.js."
+  "findings": "All 150 Neetcode questions verified across 18 categories. JS syntax passes node --check. Spaced repetition intervals work correctly: Good advances +1, Easy advances +2, Struggled goes back -1. Time budget constraint properly enforced (tested with 15 items at 300min, only 9 scheduled within 180min). The neetcode.io URLs in data.js are reference-only string data, never fetched by the app. NODE_OPTIONS must be cleared to run node in this sandbox due to missing proxy-bootstrap.js. Review fixes applied: local dates instead of UTC, import validation, localStorage quota notification, struggled decoupling, carry-forward for deferred items, demoted badge in UI, deadline fallback to 30 days."
 }
