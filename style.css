@@ -927,8 +927,72 @@ a:hover {
   transform: translateX(24px);
 }
 
-/* Clock toggle button */
-.clock-toggle-btn {
+/* ==================== STUDY SESSION TIMER ==================== */
+.study-timer-widget {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem 1.5rem;
+  min-width: 200px;
+  background: var(--neo-peach) !important;
+}
+
+.study-timer-title {
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.study-timer-display {
+  font-family: monospace;
+  font-size: 2.5rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  letter-spacing: 2px;
+  padding: 0.25rem 0.75rem;
+  border: 3px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-sm);
+  min-width: 160px;
+  text-align: center;
+}
+
+.study-timer-display.study-timer-urgent {
+  background: var(--neo-yellow);
+  animation: pulse 1.5s infinite;
+}
+
+.study-timer-display.study-timer-done {
+  background: var(--neo-pink);
+  animation: pulse 1s infinite;
+}
+
+.study-timer-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 0.4rem;
+}
+
+.study-timer-elapsed {
+  font-family: monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+}
+
+.study-timer-actions {
+  display: flex;
+  gap: 0.5rem;
   margin-top: 0.75rem;
 }
 
@@ -1222,6 +1286,15 @@ a:hover {
   .clock-hour { height: 24px; }
   .clock-minute { height: 32px; }
   .clock-second { height: 37px; }
+
+  .study-timer-widget {
+    min-width: auto;
+  }
+
+  .study-timer-display {
+    font-size: 2rem;
+    min-width: 140px;
+  }
 }
 
 @media (max-width: 480px) {

@@ -474,7 +474,7 @@ const App = {
     // Decorative widgets row
     html += `<div class="dashboard-widgets">`;
 
-    // Animated clock widget
+    // Animated clock widget (always runs)
     html += `<div class="clock-widget card">
       <div class="clock-face">
         <div class="clock-hand clock-hour" id="clock-hour"></div>
@@ -487,7 +487,29 @@ const App = {
         <div class="clock-marker clock-9"></div>
       </div>
       <div class="clock-digital" id="clock-digital"></div>
-      <button class="btn btn-sm btn-primary clock-toggle-btn" id="clock-toggle-btn">${this.clockInterval ? 'Stop' : 'Start'}</button>
+    </div>`;
+
+    // Study Session Countdown Timer
+    const studyTimerState = this.getStudyTimerState();
+    const remainingSec = Math.max(0, (this.state.settings.dailyBudget * 60) - studyTimerState.elapsedSeconds);
+    const remainingMin = Math.floor(remainingSec / 60);
+    const remainingSecPart = remainingSec % 60;
+    const elapsedMin = Math.floor(studyTimerState.elapsedSeconds / 60);
+    const elapsedSecPart = studyTimerState.elapsedSeconds % 60;
+
+    html += `<div class="study-timer-widget card">
+      <div class="study-timer-title">Study Session</div>
+      <div class="study-timer-display" id="study-timer-display">
+        ${String(remainingMin).padStart(2, '0')}:${String(remainingSecPart).padStart(2, '0')}
+      </div>
+      <div class="study-timer-label">Time Remaining</div>
+      <div class="study-timer-elapsed" id="study-timer-elapsed">
+        Elapsed: ${String(elapsedMin).padStart(2, '0')}:${String(elapsedSecPart).padStart(2, '0')}
+      </div>
+      <div class="study-timer-actions">
+        <button class="btn btn-sm btn-success" id="study-timer-start">${this.studyTimerInterval ? 'Pause' : 'Start'}</button>
+        <button class="btn btn-sm btn-warning" id="study-timer-reset">Reset</button>
+      </div>
     </div>`;
 
     // Motivational quote widget
@@ -561,10 +583,11 @@ const App = {
 
     container.innerHTML = html;
     this.bindDashboardEvents();
-    if (this.state.settings.autoStartTimer || this.clockManuallyStarted) {
-      this.startClock();
+    this.startClock();
+    this.bindStudyTimer();
+    if (this.state.settings.autoStartTimer && !this.studyTimerInterval) {
+      this.startStudyTimer();
     }
-    this.bindClockToggle();
     this.rotateQuote();
   },
 
@@ -909,7 +932,10 @@ const App = {
   // ==================== DECORATIVE WIDGETS ====================
   clockInterval: null,
   quoteInterval: null,
-  clockManuallyStarted: false,
+  studyTimerInterval: null,
+  studyTimerElapsed: 0,
+
+  STUDY_TIMER_KEY: 'dsa_study_timer_state',
 
   QUOTES: [
     { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
@@ -954,32 +980,6 @@ const App = {
 
     updateClock();
     this.clockInterval = setInterval(updateClock, 1000);
-    const toggleBtn = document.getElementById('clock-toggle-btn');
-    if (toggleBtn) toggleBtn.textContent = 'Stop';
-  },
-
-  stopClock() {
-    if (this.clockInterval) {
-      clearInterval(this.clockInterval);
-      this.clockInterval = null;
-    }
-    this.clockManuallyStarted = false;
-    const toggleBtn = document.getElementById('clock-toggle-btn');
-    if (toggleBtn) toggleBtn.textContent = 'Start';
-  },
-
-  bindClockToggle() {
-    const toggleBtn = document.getElementById('clock-toggle-btn');
-    if (toggleBtn) {
-      toggleBtn.addEventListener('click', () => {
-        if (this.clockInterval) {
-          this.stopClock();
-        } else {
-          this.clockManuallyStarted = true;
-          this.startClock();
-        }
-      });
-    }
   },
 
   rotateQuote() {
@@ -1007,6 +1007,150 @@ const App = {
 
     showQuote();
     this.quoteInterval = setInterval(showQuote, 8000);
+  },
+
+  // ==================== STUDY SESSION TIMER ====================
+  getStudyTimerState() {
+    try {
+      const raw = localStorage.getItem(this.STUDY_TIMER_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        // Reset if stored date is not today
+        const today = SpacedRepetitionEngine.getToday();
+        if (parsed.date !== today) {
+          return { date: today, elapsedSeconds: 0 };
+        }
+        return parsed;
+      }
+    } catch (e) {
+      // ignore
+    }
+    return { date: SpacedRepetitionEngine.getToday(), elapsedSeconds: 0 };
+  },
+
+  saveStudyTimerState(elapsedSeconds) {
+    const timerState = {
+      date: SpacedRepetitionEngine.getToday(),
+      elapsedSeconds: elapsedSeconds
+    };
+    try {
+      localStorage.setItem(this.STUDY_TIMER_KEY, JSON.stringify(timerState));
+    } catch (e) {
+      // ignore quota errors for timer
+    }
+  },
+
+  bindStudyTimer() {
+    const startBtn = document.getElementById('study-timer-start');
+    const resetBtn = document.getElementById('study-timer-reset');
+
+    if (startBtn) {
+      startBtn.addEventListener('click', () => {
+        if (this.studyTimerInterval) {
+          this.pauseStudyTimer();
+        } else {
+          this.startStudyTimer();
+        }
+      });
+    }
+
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        this.resetStudyTimer();
+      });
+    }
+  },
+
+  startStudyTimer() {
+    if (this.studyTimerInterval) return; // already running
+
+    const timerState = this.getStudyTimerState();
+    this.studyTimerElapsed = timerState.elapsedSeconds;
+    const totalBudgetSec = this.state.settings.dailyBudget * 60;
+
+    // If already exceeded budget, don't start
+    if (this.studyTimerElapsed >= totalBudgetSec) {
+      alert('Study session complete! Your daily budget has been used up. Reset to start a new session.');
+      return;
+    }
+
+    this.studyTimerInterval = setInterval(() => {
+      this.studyTimerElapsed++;
+      this.saveStudyTimerState(this.studyTimerElapsed);
+      this.updateStudyTimerDisplay();
+
+      // Check if time is up
+      if (this.studyTimerElapsed >= totalBudgetSec) {
+        this.pauseStudyTimer();
+        this.showStudyTimerAlert();
+      }
+    }, 1000);
+
+    const startBtn = document.getElementById('study-timer-start');
+    if (startBtn) startBtn.textContent = 'Pause';
+  },
+
+  pauseStudyTimer() {
+    if (this.studyTimerInterval) {
+      clearInterval(this.studyTimerInterval);
+      this.studyTimerInterval = null;
+    }
+    const startBtn = document.getElementById('study-timer-start');
+    if (startBtn) startBtn.textContent = 'Start';
+  },
+
+  resetStudyTimer() {
+    this.pauseStudyTimer();
+    this.studyTimerElapsed = 0;
+    this.saveStudyTimerState(0);
+    this.updateStudyTimerDisplay();
+  },
+
+  updateStudyTimerDisplay() {
+    const totalBudgetSec = this.state.settings.dailyBudget * 60;
+    const remainingSec = Math.max(0, totalBudgetSec - this.studyTimerElapsed);
+    const remainingMin = Math.floor(remainingSec / 60);
+    const remainingSecPart = remainingSec % 60;
+    const elapsedMin = Math.floor(this.studyTimerElapsed / 60);
+    const elapsedSecPart = this.studyTimerElapsed % 60;
+
+    const display = document.getElementById('study-timer-display');
+    const elapsed = document.getElementById('study-timer-elapsed');
+
+    if (display) {
+      display.textContent = `${String(remainingMin).padStart(2, '0')}:${String(remainingSecPart).padStart(2, '0')}`;
+      // Add urgency class when less than 5 minutes remain
+      if (remainingSec <= 300 && remainingSec > 0) {
+        display.classList.add('study-timer-urgent');
+      } else {
+        display.classList.remove('study-timer-urgent');
+      }
+      if (remainingSec === 0) {
+        display.classList.add('study-timer-done');
+      } else {
+        display.classList.remove('study-timer-done');
+      }
+    }
+    if (elapsed) {
+      elapsed.textContent = `Elapsed: ${String(elapsedMin).padStart(2, '0')}:${String(elapsedSecPart).padStart(2, '0')}`;
+    }
+  },
+
+  showStudyTimerAlert() {
+    // Show a non-blocking notification
+    let banner = document.getElementById('study-timer-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'study-timer-banner';
+      banner.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:1rem 1.5rem;background:var(--neo-mint);color:#1a1a1a;text-align:center;z-index:10000;font-size:1rem;font-weight:700;border-bottom:3px solid #1a1a1a;';
+      const closeBtn = document.createElement('button');
+      closeBtn.textContent = '\u00d7';
+      closeBtn.style.cssText = 'position:absolute;right:1rem;top:50%;transform:translateY(-50%);background:none;border:none;color:#1a1a1a;font-size:1.5rem;cursor:pointer;font-weight:900;';
+      closeBtn.addEventListener('click', () => banner.remove());
+      banner.appendChild(document.createTextNode('Study session complete! Great work today.'));
+      banner.appendChild(closeBtn);
+      document.body.prepend(banner);
+    }
   },
 
   showSaveError(message) {
