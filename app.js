@@ -476,6 +476,7 @@ const StudyTimer = {
 
     this.remainingSeconds = this.totalSeconds;
     this.hasStarted = true;
+    document.getElementById('timer-reset-btn').style.display = 'none';
     this.isRunning = true;
     this.isPaused = false;
 
