@@ -681,6 +681,20 @@ textarea:focus {
   color: var(--text-muted);
 }
 
+/* Revision status in question items */
+.question-title-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.revision-status {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  margin-top: 0.125rem;
+  font-style: italic;
+}
+
 /* Batch action bar */
 .batch-bar {
   display: flex;

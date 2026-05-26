@@ -257,16 +257,17 @@ const Scheduler = {
     } else {
       const budget = state.settings.dailyBudget || DEFAULT_DAILY_BUDGET;
       const todayHistory = state.history.filter(h => h.date === today && h.feedback !== 'completed');
-      const reviewedToday = new Set();
-      let timeUsed = 0;
 
+      // Use stored timeEstimate from history when available, fall back to type-based estimate
+      let timeUsed = 0;
+      const reviewedToday = new Set();
       todayHistory.forEach(h => {
         if (!reviewedToday.has(h.questionId)) {
           reviewedToday.add(h.questionId);
-          const schedItem = state.revisionSchedule.find(r => r.questionId === h.questionId);
-          if (schedItem && schedItem.type === 'read-notes') {
-            timeUsed += TIME_READ_NOTES;
+          if (typeof h.timeEstimate === 'number') {
+            timeUsed += h.timeEstimate;
           } else {
+            // Legacy entries without timeEstimate: use default re-solve time
             timeUsed += TIME_RE_SOLVE;
           }
         }
@@ -306,7 +307,7 @@ const Scheduler = {
       if (a.daysOverdue !== b.daysOverdue) return b.daysOverdue - a.daysOverdue;
       if (a.lastFeedback === 'struggled' && b.lastFeedback !== 'struggled') return -1;
       if (b.lastFeedback === 'struggled' && a.lastFeedback !== 'struggled') return 1;
-      return 0;
+      return a.question.category.localeCompare(b.question.category);
     });
 
     for (const item of dueToday) {
@@ -761,24 +762,32 @@ const App = {
       }
     }
 
-    // Bonus/Extra Reviews: show when all scheduled items are done and timer has time remaining
-    if (scheduled.length === 0 && totalTime === 0) {
-      const todayReviewCount = this.state.history.filter(h => h.date === SpacedRepetitionEngine.getToday() && h.feedback !== 'completed').length;
-      if (todayReviewCount > 0) {
-        // Use actual timer remaining time if timer has been started
-        const timerMinutes = StudyTimer.hasStarted ? StudyTimer.getRemainingMinutes() : undefined;
-        const bonusItems = Scheduler.getBonusItems(this.state, timerMinutes);
-        if (bonusItems.length > 0) {
-          const bonusTime = bonusItems.reduce((sum, i) => sum + i.timeEstimate, 0);
-          const remainingLabel = StudyTimer.hasStarted
-            ? `${StudyTimer.getRemainingMinutes()} min remaining on timer`
-            : `${bonusTime} min of bonus reviews`;
-          html += `<div class="dashboard-section">
-            <div class="section-title">Extra Reviews</div>
-            <p class="section-subtitle">You finished all scheduled items! Here are bonus reviews that fit your remaining time (${remainingLabel})</p>
-            ${bonusItems.map(item => this.renderBonusItem(item)).join('')}
-          </div>`;
-        }
+    // Bonus/Extra Reviews: show when all scheduled items have been reviewed today
+    const todayReviewHistory = this.state.history.filter(h => h.date === SpacedRepetitionEngine.getToday() && h.feedback !== 'completed');
+    const reviewedTodaySet = new Set();
+    todayReviewHistory.forEach(h => reviewedTodaySet.add(h.questionId));
+
+    // Check if all originally scheduled items (due today) have been reviewed
+    const allScheduledReviewed = scheduled.length === 0 && reviewedTodaySet.size > 0;
+
+    if (allScheduledReviewed) {
+      // Use actual timer remaining time if timer has been started
+      const timerMinutes = StudyTimer.hasStarted ? StudyTimer.getRemainingMinutes() : undefined;
+      const bonusItems = Scheduler.getBonusItems(this.state, timerMinutes);
+      if (bonusItems.length > 0) {
+        const bonusTime = bonusItems.reduce((sum, i) => sum + i.timeEstimate, 0);
+        const remainingLabel = StudyTimer.hasStarted
+          ? `${StudyTimer.getRemainingMinutes()} min remaining on timer`
+          : `${bonusTime} min of bonus reviews`;
+        html += `<div class="dashboard-section">
+          <div class="section-title">Extra Reviews</div>
+          <p class="section-subtitle">You finished all scheduled items! Here are bonus reviews that fit your remaining time (${remainingLabel})</p>
+          ${bonusItems.map(item => this.renderBonusItem(item)).join('')}
+        </div>`;
+      } else {
+        html += `<div class="empty-state">
+          <p>All done for today! No more bonus items available.</p>
+        </div>`;
       }
     }
 
@@ -840,14 +849,21 @@ const App = {
   },
 
   handleFeedback(questionId, feedback) {
+    // Determine the time estimate BEFORE scheduling changes the type
+    const schedItem = this.state.revisionSchedule.find(r => r.questionId === questionId);
+    const timeEstimate = schedItem
+      ? (schedItem.type === 'read-notes' ? TIME_READ_NOTES : TIME_RE_SOLVE)
+      : TIME_RE_SOLVE;
+
     this.state = SpacedRepetitionEngine.scheduleRevision(questionId, feedback, this.state);
 
-    // Log activity
+    // Log activity with the time estimate at time of review
     const today = SpacedRepetitionEngine.getToday();
     this.state.history.push({
       date: today,
       questionId: questionId,
       feedback: feedback,
+      timeEstimate: timeEstimate,
       timestamp: Date.now()
     });
 
@@ -892,10 +908,35 @@ const App = {
     const mastery = SpacedRepetitionEngine.getMasteryLevel(schedItem);
     const diffClass = q.difficulty.toLowerCase();
 
+    // Build revision status info for completed questions
+    let revisionInfo = '';
+    if (isCompleted) {
+      const questionHistory = this.state.history.filter(h => h.questionId === q.id);
+      // Count revision feedback entries (exclude 'completed' which is the initial mark)
+      const revisionEntries = questionHistory.filter(h => h.feedback !== 'completed');
+      const revCount = revisionEntries.length;
+
+      if (revCount > 0) {
+        // Show the latest revision number and date
+        const latestEntry = revisionEntries[revisionEntries.length - 1];
+        revisionInfo = `<div class="revision-status">Rev ${revCount} done on ${latestEntry.date}</div>`;
+      } else {
+        // Only the initial completion exists
+        const completedEntry = questionHistory.find(h => h.feedback === 'completed');
+        const completedDate = completedEntry ? completedEntry.date : (this.state.completedQuestions[q.id].date || '');
+        if (completedDate) {
+          revisionInfo = `<div class="revision-status">Completed on ${completedDate}</div>`;
+        }
+      }
+    }
+
     return `<div class="question-item ${isCompleted ? 'question-completed' : ''}">
       <div class="question-info">
         <span class="badge badge-${diffClass}">${q.difficulty}</span>
-        <span class="question-title">${q.title}</span>
+        <div class="question-title-wrap">
+          <span class="question-title">${q.title}</span>
+          ${revisionInfo}
+        </div>
       </div>
       <div class="question-actions">
         ${isCompleted ?

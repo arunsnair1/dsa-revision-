@@ -1,0 +1,29 @@
+{
+  "id": "FEAT-004",
+  "type": "fix",
+  "description": "Fix dynamic bonus allocation and add revision completion info in question items",
+  "status": "in_progress",
+  "steps": [
+    "Fix getBonusItems to track time spent based on stored timeEstimate in history entries rather than current mutated type",
+    "Store timeEstimate in history entries when feedback is given",
+    "Make bonus section re-render dynamically after each bonus item feedback",
+    "Add revision completion info (Rev N done on [date]) in renderQuestionItem",
+    "Add CSS styling for revision info text"
+  ],
+  "acceptance_criteria": [
+    "When all scheduled items are done, bonus section shows and refreshes after each bonus feedback",
+    "Time tracking uses stored timeEstimate from history, not current item type",
+    "Bonus items still follow spaced repetition logic (overdue > struggled > category order)",
+    "Bonus items only pull from deferred/today items and items due tomorrow",
+    "Feedback on bonus items goes through SpacedRepetitionEngine.scheduleRevision()",
+    "Question bank shows revision status (Rev N done on [date]) for completed questions",
+    "Dark theme styling maintained"
+  ],
+  "verification": [
+    "Verify JS syntax with node --check app.js",
+    "Verify bonus re-render logic in code",
+    "Verify history entries include timeEstimate field"
+  ],
+  "blocked_reason": null,
+  "findings": null
+}
