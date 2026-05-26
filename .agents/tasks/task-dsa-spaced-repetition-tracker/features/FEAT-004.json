@@ -2,7 +2,7 @@
   "id": "FEAT-004",
   "type": "fix",
   "description": "Fix dynamic bonus allocation and add revision completion info in question items",
-  "status": "in_progress",
+  "status": "completed",
   "steps": [
     "Fix getBonusItems to track time spent based on stored timeEstimate in history entries rather than current mutated type",
     "Store timeEstimate in history entries when feedback is given",
@@ -25,5 +25,5 @@
     "Verify history entries include timeEstimate field"
   ],
   "blocked_reason": null,
-  "findings": null
+  "findings": "Fixed bonus allocation to be truly dynamic: (1) timeEstimate stored in history entries at feedback time so remaining time calculation is accurate regardless of subsequent type mutations, (2) bonus section condition simplified to scheduled.length===0 && reviewedTodaySet.size>0 which naturally handles the flow of scheduled->deferred->bonus, (3) renderDashboard called after each feedback which re-renders bonus items. Added revision status display in question bank using history entries to count revisions and show dates. Legacy history entries without timeEstimate gracefully fall back to TIME_RE_SOLVE."
 }
