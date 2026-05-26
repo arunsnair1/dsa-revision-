@@ -251,6 +251,99 @@ const Scheduler = {
     return { scheduled, deferred, totalTime, budget };
   },
 
+  getBonusItems(state) {
+    const today = SpacedRepetitionEngine.getToday();
+    const tomorrow = SpacedRepetitionEngine.addDays(today, 1);
+    const budget = state.settings.dailyBudget || DEFAULT_DAILY_BUDGET;
+
+    // Calculate time already spent today from history entries
+    const todayHistory = state.history.filter(h => h.date === today && h.feedback !== 'completed');
+    let timeSpentToday = 0;
+    todayHistory.forEach(h => {
+      timeSpentToday += h.timeEstimate || TIME_RE_SOLVE;
+    });
+
+    const remainingBudget = Math.max(0, budget - timeSpentToday);
+
+    // Only show bonus items if all scheduled items for today have been reviewed
+    const { scheduled } = this.getDailyItems(state);
+    if (scheduled.length > 0) {
+      return { bonusItems: [], remainingBudget };
+    }
+
+    // Must have done at least one review today to show bonus
+    if (todayHistory.length === 0) {
+      return { bonusItems: [], remainingBudget };
+    }
+
+    // Gather candidates: (a) deferred items still due today/overdue that haven't been reviewed today
+    const reviewedTodayIds = new Set(todayHistory.map(h => h.questionId));
+
+    let candidates = [];
+
+    // (a) Deferred/overdue items not yet reviewed today
+    const overdueOrDueToday = state.revisionSchedule
+      .filter(r => r.nextReviewDate <= today && !reviewedTodayIds.has(r.questionId))
+      .map(r => {
+        const question = QUESTIONS.find(q => q.id === r.questionId);
+        if (!question) return null;
+        const daysOverdue = SpacedRepetitionEngine.getDaysDiff(r.nextReviewDate, today);
+        return {
+          ...r,
+          question: question,
+          daysOverdue: daysOverdue,
+          timeEstimate: r.type === 'read-notes' ? TIME_READ_NOTES : TIME_RE_SOLVE,
+          mastery: SpacedRepetitionEngine.getMasteryLevel(r),
+          bonusSource: 'deferred'
+        };
+      })
+      .filter(Boolean);
+
+    candidates = candidates.concat(overdueOrDueToday);
+
+    // (b) Items due tomorrow not yet reviewed today
+    const dueTomorrow = state.revisionSchedule
+      .filter(r => r.nextReviewDate === tomorrow && !reviewedTodayIds.has(r.questionId))
+      .map(r => {
+        const question = QUESTIONS.find(q => q.id === r.questionId);
+        if (!question) return null;
+        return {
+          ...r,
+          question: question,
+          daysOverdue: 0,
+          timeEstimate: r.type === 'read-notes' ? TIME_READ_NOTES : TIME_RE_SOLVE,
+          mastery: SpacedRepetitionEngine.getMasteryLevel(r),
+          bonusSource: 'tomorrow'
+        };
+      })
+      .filter(Boolean);
+
+    candidates = candidates.concat(dueTomorrow);
+
+    // Sort: overdue count desc > struggled first > category alphabetical
+    candidates.sort((a, b) => {
+      if (a.daysOverdue !== b.daysOverdue) return b.daysOverdue - a.daysOverdue;
+      if (a.lastFeedback === 'struggled' && b.lastFeedback !== 'struggled') return -1;
+      if (b.lastFeedback === 'struggled' && a.lastFeedback !== 'struggled') return 1;
+      if (a.question.category !== b.question.category) {
+        return a.question.category.localeCompare(b.question.category);
+      }
+      return 0;
+    });
+
+    // Fit within remaining time budget
+    let usedTime = 0;
+    const bonusItems = [];
+    for (const item of candidates) {
+      if (usedTime + item.timeEstimate <= remainingBudget) {
+        bonusItems.push(item);
+        usedTime += item.timeEstimate;
+      }
+    }
+
+    return { bonusItems, remainingBudget };
+  },
+
   carryForwardDeferred(state) {
     // Bump nextReviewDate of deferred items to tomorrow so they do not
     // accumulate overdue counts and permanently block the schedule.
@@ -581,6 +674,16 @@ const App = {
       }
     }
 
+    // Bonus items section
+    const { bonusItems, remainingBudget } = Scheduler.getBonusItems(this.state);
+    if (bonusItems.length > 0) {
+      html += `<div class="dashboard-section">
+        <div class="section-title">Bonus Questions</div>
+        <p class="section-subtitle">All scheduled reviews done! Here are extra items within your remaining ${remainingBudget} min budget</p>
+        ${bonusItems.map(item => this.renderBonusItem(item)).join('')}
+      </div>`;
+    }
+
     container.innerHTML = html;
     this.bindDashboardEvents();
     this.startClock();
@@ -613,6 +716,30 @@ const App = {
     </div>`;
   },
 
+  renderBonusItem(item) {
+    const overdueText = item.daysOverdue > 0 ? `<span style="color:var(--danger)">${item.daysOverdue}d overdue</span>` : '';
+    const masteryClass = item.mastery.toLowerCase();
+    const sourceBadge = item.bonusSource === 'tomorrow'
+      ? '<span class="badge badge-bonus-tomorrow">due tomorrow</span>'
+      : '<span class="badge badge-bonus-deferred">deferred</span>';
+
+    return `<div class="review-item bonus-item">
+      <div class="review-item-left">
+        <span class="badge badge-${masteryClass}">${item.mastery}</span>
+        ${sourceBadge}
+        <div>
+          <div class="review-item-title">${item.question.title}</div>
+          <div class="review-item-meta">${item.question.category} ${overdueText}</div>
+        </div>
+      </div>
+      <div class="review-item-actions">
+        <button class="btn btn-sm btn-success" data-action="feedback" data-id="${item.questionId}" data-feedback="easy">Easy</button>
+        <button class="btn btn-sm btn-primary" data-action="feedback" data-id="${item.questionId}" data-feedback="good">Good</button>
+        <button class="btn btn-sm btn-warning" data-action="feedback" data-id="${item.questionId}" data-feedback="struggled">Struggled</button>
+      </div>
+    </div>`;
+  },
+
   bindDashboardEvents() {
     document.querySelectorAll('[data-action="feedback"]').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -624,14 +751,19 @@ const App = {
   },
 
   handleFeedback(questionId, feedback) {
+    // Capture timeEstimate BEFORE scheduleRevision mutates the item type
+    const existingItem = this.state.revisionSchedule.find(r => r.questionId === questionId);
+    const timeEstimate = existingItem && existingItem.type === 'read-notes' ? TIME_READ_NOTES : TIME_RE_SOLVE;
+
     this.state = SpacedRepetitionEngine.scheduleRevision(questionId, feedback, this.state);
 
-    // Log activity
+    // Log activity with timeEstimate
     const today = SpacedRepetitionEngine.getToday();
     this.state.history.push({
       date: today,
       questionId: questionId,
       feedback: feedback,
+      timeEstimate: timeEstimate,
       timestamp: Date.now()
     });
 
@@ -698,10 +830,30 @@ const App = {
     const diffClass = q.difficulty.toLowerCase();
     const today = SpacedRepetitionEngine.getToday();
 
+    // Build revision status text for completed questions
+    let revisionStatusHtml = '';
+    if (isCompleted) {
+      const revisionEntries = this.state.history.filter(
+        h => h.questionId === q.id && h.feedback !== 'completed'
+      );
+      if (revisionEntries.length > 0) {
+        const latestEntry = revisionEntries[revisionEntries.length - 1];
+        const formattedDate = this.formatDisplayDate(latestEntry.date);
+        revisionStatusHtml = `<div class="revision-status">Rev ${revisionEntries.length} done on ${formattedDate}</div>`;
+      } else {
+        const completionDate = this.state.completedQuestions[q.id].date;
+        const formattedDate = this.formatDisplayDate(completionDate);
+        revisionStatusHtml = `<div class="revision-status">Completed on ${formattedDate}</div>`;
+      }
+    }
+
     return `<div class="question-item ${isCompleted ? 'question-completed' : ''}">
       <div class="question-info">
         <span class="badge badge-${diffClass}">${q.difficulty}</span>
-        <span class="question-title">${q.title}</span>
+        <div class="question-title-wrap">
+          <span class="question-title">${q.title}</span>
+          ${revisionStatusHtml}
+        </div>
       </div>
       <div class="question-actions">
         ${isCompleted ?
@@ -1171,6 +1323,13 @@ const App = {
     banner.childNodes[0] && banner.childNodes[0].nodeType === 3
       ? banner.childNodes[0].textContent = message
       : banner.insertBefore(document.createTextNode(message), banner.firstChild);
+  },
+
+  formatDisplayDate(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   },
 
   showModal(message, onConfirm) {

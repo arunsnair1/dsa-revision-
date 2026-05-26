@@ -1302,3 +1302,35 @@ a:hover {
     font-size: 0.95rem;
   }
 }
+
+/* ==================== BONUS ITEMS ==================== */
+.bonus-item {
+  border-left: 4px solid var(--neo-mint);
+}
+
+.badge-bonus-tomorrow {
+  background: var(--neo-sky);
+  color: #1a1a1a;
+  font-size: 0.65rem;
+}
+
+.badge-bonus-deferred {
+  background: var(--neo-peach);
+  color: #1a1a1a;
+  font-size: 0.65rem;
+}
+
+/* ==================== REVISION STATUS ==================== */
+.question-title-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.revision-status {
+  font-size: 0.7rem;
+  font-style: italic;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+  font-weight: 500;
+}
