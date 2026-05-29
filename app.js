@@ -253,7 +253,6 @@ const Scheduler = {
 
   getBonusItems(state) {
     const today = SpacedRepetitionEngine.getToday();
-    const tomorrow = SpacedRepetitionEngine.addDays(today, 1);
     const budget = state.settings.dailyBudget || DEFAULT_DAILY_BUDGET;
 
     // Calculate time already spent today from history entries
@@ -320,7 +319,8 @@ const Scheduler = {
 
     // Gather bonus candidates from:
     // (a) Deferred items (due today/overdue, not yet reviewed)
-    // (b) Items due tomorrow (not yet reviewed)
+    // (b) Any other unreviewed due items not captured in scheduled or deferred
+    // NOTE: No "due tomorrow" items - pulling them early damages the spaced repetition scheme
     let candidates = [];
 
     const unreviewedDeferred = simulatedDeferred
@@ -345,24 +345,6 @@ const Scheduler = {
         bonusSource: 'deferred'
       }));
     candidates = candidates.concat(overdueNotCaptured);
-
-    // (b) Items due tomorrow
-    const dueTomorrow = state.revisionSchedule
-      .filter(r => r.nextReviewDate === tomorrow && !reviewedTodayIds.has(r.questionId))
-      .map(r => {
-        const question = QUESTIONS.find(q => q.id === r.questionId);
-        if (!question) return null;
-        return {
-          ...r,
-          question: question,
-          daysOverdue: 0,
-          timeEstimate: r.type === 'read-notes' ? TIME_READ_NOTES : TIME_RE_SOLVE,
-          mastery: SpacedRepetitionEngine.getMasteryLevel(r),
-          bonusSource: 'tomorrow'
-        };
-      })
-      .filter(Boolean);
-    candidates = candidates.concat(dueTomorrow);
 
     // Sort: overdue count desc > struggled first > category alphabetical
     candidates.sort((a, b) => {
@@ -491,9 +473,6 @@ const App = {
 
   init() {
     this.state = DataManager.load();
-    // Carry forward any deferred items from previous sessions
-    this.state = Scheduler.carryForwardDeferred(this.state);
-    DataManager.save(this.state);
     this.bindNavigation();
     this.bindEvents();
     this.renderHeader();
@@ -763,8 +742,8 @@ const App = {
   renderBonusItem(item) {
     const overdueText = item.daysOverdue > 0 ? `<span style="color:var(--danger)">${item.daysOverdue}d overdue</span>` : '';
     const masteryClass = item.mastery.toLowerCase();
-    const sourceBadge = item.bonusSource === 'tomorrow'
-      ? '<span class="badge badge-bonus-tomorrow">due tomorrow</span>'
+    const sourceBadge = item.daysOverdue > 0
+      ? '<span class="badge badge-bonus-deferred">overdue</span>'
       : '<span class="badge badge-bonus-deferred">deferred</span>';
 
     return `<div class="review-item bonus-item">
