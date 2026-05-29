@@ -265,43 +265,88 @@ const Scheduler = {
 
     const remainingBudget = Math.max(0, budget - timeSpentToday);
 
-    // Only show bonus items if all scheduled items for today have been reviewed
-    const { scheduled } = this.getDailyItems(state);
-    if (scheduled.length > 0) {
-      return { bonusItems: [], remainingBudget };
-    }
-
     // Must have done at least one review today to show bonus
     if (todayHistory.length === 0) {
       return { bonusItems: [], remainingBudget };
     }
 
-    // Gather candidates: (a) deferred items still due today/overdue that haven't been reviewed today
+    // Check if all "scheduled" items have been reviewed today.
+    // Simulate the same budget/priority logic as getDailyItems to determine
+    // which items would be scheduled vs deferred, then verify all scheduled
+    // ones have been reviewed.
     const reviewedTodayIds = new Set(todayHistory.map(h => h.questionId));
 
-    let candidates = [];
-
-    // (a) Deferred/overdue items not yet reviewed today
-    const overdueOrDueToday = state.revisionSchedule
-      .filter(r => r.nextReviewDate <= today && !reviewedTodayIds.has(r.questionId))
+    // Get all items due today/overdue
+    const allDueItems = state.revisionSchedule
+      .filter(r => r.nextReviewDate <= today)
       .map(r => {
         const question = QUESTIONS.find(q => q.id === r.questionId);
-        if (!question) return null;
-        const daysOverdue = SpacedRepetitionEngine.getDaysDiff(r.nextReviewDate, today);
-        return {
-          ...r,
-          question: question,
-          daysOverdue: daysOverdue,
-          timeEstimate: r.type === 'read-notes' ? TIME_READ_NOTES : TIME_RE_SOLVE,
-          mastery: SpacedRepetitionEngine.getMasteryLevel(r),
-          bonusSource: 'deferred'
-        };
+        return { ...r, question, timeEstimate: r.type === 'read-notes' ? TIME_READ_NOTES : TIME_RE_SOLVE };
       })
-      .filter(Boolean);
+      .filter(r => r.question);
 
-    candidates = candidates.concat(overdueOrDueToday);
+    // Sort with same priority logic as getDailyItems
+    allDueItems.sort((a, b) => {
+      const daysOverdueA = SpacedRepetitionEngine.getDaysDiff(a.nextReviewDate, today);
+      const daysOverdueB = SpacedRepetitionEngine.getDaysDiff(b.nextReviewDate, today);
+      if (daysOverdueA !== daysOverdueB) return daysOverdueB - daysOverdueA;
+      if (a.lastFeedback === 'struggled' && b.lastFeedback !== 'struggled') return -1;
+      if (b.lastFeedback === 'struggled' && a.lastFeedback !== 'struggled') return 1;
+      if (a.question.category !== b.question.category) return a.question.category.localeCompare(b.question.category);
+      return 0;
+    });
 
-    // (b) Items due tomorrow not yet reviewed today
+    // Simulate budget allocation to determine scheduled vs deferred
+    let simTime = 0;
+    const simulatedScheduled = [];
+    const simulatedDeferred = [];
+    for (const item of allDueItems) {
+      if (simTime + item.timeEstimate <= budget) {
+        simulatedScheduled.push(item);
+        simTime += item.timeEstimate;
+      } else if (item.type === 're-solve' && simTime + TIME_READ_NOTES <= budget) {
+        simulatedScheduled.push(item);
+        simTime += TIME_READ_NOTES;
+      } else {
+        simulatedDeferred.push(item);
+      }
+    }
+
+    // If not all simulated scheduled items have been reviewed, don't show bonus yet
+    const allScheduledDone = simulatedScheduled.every(item => reviewedTodayIds.has(item.questionId));
+    if (!allScheduledDone) {
+      return { bonusItems: [], remainingBudget };
+    }
+
+    // Gather bonus candidates from:
+    // (a) Deferred items (due today/overdue, not yet reviewed)
+    // (b) Items due tomorrow (not yet reviewed)
+    let candidates = [];
+
+    const unreviewedDeferred = simulatedDeferred
+      .filter(r => !reviewedTodayIds.has(r.questionId))
+      .map(r => ({
+        ...r,
+        daysOverdue: SpacedRepetitionEngine.getDaysDiff(r.nextReviewDate, today),
+        mastery: SpacedRepetitionEngine.getMasteryLevel(r),
+        bonusSource: 'deferred'
+      }));
+    candidates = candidates.concat(unreviewedDeferred);
+
+    // Also include any unreviewed due items not captured in scheduled or deferred
+    const overdueNotCaptured = allDueItems
+      .filter(r => !reviewedTodayIds.has(r.questionId))
+      .filter(r => !simulatedDeferred.some(d => d.questionId === r.questionId))
+      .filter(r => !simulatedScheduled.some(s => s.questionId === r.questionId))
+      .map(r => ({
+        ...r,
+        daysOverdue: SpacedRepetitionEngine.getDaysDiff(r.nextReviewDate, today),
+        mastery: SpacedRepetitionEngine.getMasteryLevel(r),
+        bonusSource: 'deferred'
+      }));
+    candidates = candidates.concat(overdueNotCaptured);
+
+    // (b) Items due tomorrow
     const dueTomorrow = state.revisionSchedule
       .filter(r => r.nextReviewDate === tomorrow && !reviewedTodayIds.has(r.questionId))
       .map(r => {
@@ -317,7 +362,6 @@ const Scheduler = {
         };
       })
       .filter(Boolean);
-
     candidates = candidates.concat(dueTomorrow);
 
     // Sort: overdue count desc > struggled first > category alphabetical
