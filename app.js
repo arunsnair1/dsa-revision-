@@ -191,9 +191,10 @@ const SpacedRepetitionEngine = {
 
 // ==================== SCHEDULER ====================
 const Scheduler = {
-  getDailyItems(state) {
+  getDailyItems(state, budgetOverride) {
     const today = SpacedRepetitionEngine.getToday();
-    const budget = state.settings.dailyBudget || DEFAULT_DAILY_BUDGET;
+    const dailyBudget = state.settings.dailyBudget || DEFAULT_DAILY_BUDGET;
+    const budget = Number.isFinite(budgetOverride) ? Math.max(0, budgetOverride) : dailyBudget;
 
     // Get all items due today or overdue
     let dueItems = state.revisionSchedule
@@ -251,9 +252,10 @@ const Scheduler = {
     return { scheduled, deferred, totalTime, budget };
   },
 
-  getBonusItems(state) {
+  getBonusItems(state, budgetOverride, remainingBudgetOverride) {
     const today = SpacedRepetitionEngine.getToday();
-    const budget = state.settings.dailyBudget || DEFAULT_DAILY_BUDGET;
+    const dailyBudget = state.settings.dailyBudget || DEFAULT_DAILY_BUDGET;
+    const budget = Number.isFinite(budgetOverride) ? Math.max(0, budgetOverride) : dailyBudget;
 
     // Calculate time already spent today from history entries
     const todayHistory = state.history.filter(h => h.date === today && h.feedback !== 'completed');
@@ -262,7 +264,9 @@ const Scheduler = {
       timeSpentToday += h.timeEstimate || TIME_RE_SOLVE;
     });
 
-    const remainingBudget = Math.max(0, budget - timeSpentToday);
+    const remainingBudget = Number.isFinite(remainingBudgetOverride)
+      ? Math.max(0, remainingBudgetOverride)
+      : Math.max(0, budget - timeSpentToday);
 
     // Must have done at least one review today to show bonus
     if (todayHistory.length === 0) {
@@ -572,7 +576,8 @@ const App = {
 
   renderDashboard() {
     const container = document.getElementById('dashboard-content');
-    const { scheduled, deferred, totalTime, budget } = Scheduler.getDailyItems(this.state);
+    const studyBudget = this.getRemainingStudyBudget();
+    const { scheduled, deferred, totalTime, budget } = Scheduler.getDailyItems(this.state, studyBudget.remainingMinutes);
     const stats = ProgressTracker.getStats(this.state);
 
     let html = '';
@@ -606,8 +611,8 @@ const App = {
     </div>`;
 
     // Study Session Countdown Timer
-    const studyTimerState = this.getStudyTimerState();
-    const remainingSec = Math.max(0, (this.state.settings.dailyBudget * 60) - studyTimerState.elapsedSeconds);
+    const studyTimerState = studyBudget.timerState;
+    const remainingSec = studyBudget.timerRemainingSeconds;
     const remainingMin = Math.floor(remainingSec / 60);
     const remainingSecPart = remainingSec % 60;
     const elapsedMin = Math.floor(studyTimerState.elapsedSeconds / 60);
@@ -650,14 +655,19 @@ const App = {
     }
 
     // Time budget
+    const budgetContext = studyBudget.remainingMinutes < studyBudget.dailyBudget
+      ? `Study session timer budget: ${studyBudget.remainingMinutes} min left of ${studyBudget.dailyBudget} min daily budget`
+      : `Study session timer budget: ${studyBudget.dailyBudget} min`;
+    const budgetProgress = budget > 0 ? Math.min(100, (totalTime / budget) * 100) : 0;
     html += `<div class="time-budget">
       <div class="time-budget-info">
-        <div class="time-budget-label">Today's Study Time</div>
+        <div class="time-budget-label">Study Session Allocation</div>
         <div class="time-budget-value">${totalTime} / ${budget} min</div>
+        <div class="section-subtitle">${budgetContext}</div>
       </div>
       <div style="width:120px">
         <div class="progress-bar">
-          <div class="progress-bar-fill accent" style="width:${Math.min(100, (totalTime/budget)*100)}%"></div>
+          <div class="progress-bar-fill accent" style="width:${budgetProgress}%"></div>
         </div>
       </div>
     </div>`;
@@ -691,14 +701,14 @@ const App = {
       if (deferred.length > 0) {
         html += `<div class="dashboard-section">
           <div class="section-title">Deferred to Tomorrow</div>
-          <p class="section-subtitle">These items exceed today's ${budget}-minute budget</p>
+          <p class="section-subtitle">These items exceed the current study session timer budget of ${budget} minutes</p>
           ${deferred.map(item => this.renderReviewItem(item, true)).join('')}
         </div>`;
       }
     }
 
     // Bonus items section
-    const { bonusItems, remainingBudget } = Scheduler.getBonusItems(this.state);
+    const { bonusItems, remainingBudget } = Scheduler.getBonusItems(this.state, budget, Math.max(0, budget - totalTime));
     if (bonusItems.length > 0) {
       html += `<div class="dashboard-section">
         <div class="section-title">Bonus Questions</div>
@@ -1213,6 +1223,21 @@ const App = {
     } catch (e) {
       // ignore quota errors for timer
     }
+  },
+
+  getRemainingStudyBudget() {
+    const dailyBudget = this.state.settings.dailyBudget || DEFAULT_DAILY_BUDGET;
+    const timerState = this.getStudyTimerState();
+    const timerRemainingSeconds = Math.max(0, (dailyBudget * 60) - (timerState.elapsedSeconds || 0));
+    const timerRemainingMinutes = Math.ceil(timerRemainingSeconds / 60);
+
+    return {
+      dailyBudget,
+      timerState,
+      timerRemainingSeconds,
+      timerRemainingMinutes,
+      remainingMinutes: timerRemainingMinutes
+    };
   },
 
   bindStudyTimer() {
