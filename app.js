@@ -654,7 +654,7 @@ const App = {
       </div>`;
     }
 
-    // Time budget
+    // Allocate questions strictly from the Study Session timer's remaining time.
     const budgetContext = studyBudget.remainingMinutes < studyBudget.dailyBudget
       ? `Study session timer budget: ${studyBudget.remainingMinutes} min left of ${studyBudget.dailyBudget} min daily budget`
       : `Study session timer budget: ${studyBudget.dailyBudget} min`;
@@ -1231,6 +1231,7 @@ const App = {
     const timerRemainingSeconds = Math.max(0, (dailyBudget * 60) - (timerState.elapsedSeconds || 0));
     const timerRemainingMinutes = Math.ceil(timerRemainingSeconds / 60);
 
+    // Do not subtract today's history here; question allocation follows the Study Session timer.
     return {
       dailyBudget,
       timerState,
